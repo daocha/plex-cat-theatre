@@ -1,0 +1,8 @@
+__pycache__/
+cache/
+*.pyc
+movies_config.json
+movies_auth_state.json
+movies_state.json
+movies_catalog_index.json
+movies.py
