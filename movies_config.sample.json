@@ -1,0 +1,28 @@
+{
+  "root": [
+    "~/Movies",
+    "~/TV"
+  ],
+  "port": 9245,
+  "host": "0.0.0.0",
+  "thumbs_dir": "./cache/thumbnails",
+  "http_port": 9245,
+  "https_port": 9245,
+  "private_folder": [
+    "Private"
+  ],
+  "private_passcode": "sha256:replace-with-your-passcode-hash",
+  "transcode": false,
+  "on_demand_transcode": true,
+  "on_demand_hls": true,
+  "transcode_video_codec": "h264_videotoolbox",
+  "enable_plex_server": true,
+  "auto_scan_on_start": false,
+  "plex": {
+    "base_url": "http://127.0.0.1:32400",
+    "token": "",
+    "timeout_seconds": 8,
+    "refresh_interval_seconds": 120,
+    "prefer_transcode": false
+  }
+}

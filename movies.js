@@ -1,0 +1,1841 @@
+function normalizeBasePath(pathname) {
+  const raw = String(pathname || "")
+    .split(/[?#]/, 1)[0]
+    .trim();
+  if (!raw || raw === "/") return "";
+  const parts = raw.split("/").filter(Boolean);
+  if (!parts.length) return "";
+  const last = parts[parts.length - 1] || "";
+  if (last.includes(".")) parts.pop();
+  if (!parts.length) return "";
+  return `/${parts.join("/")}`;
+}
+
+function getBasePath() {
+  const currentSrc =
+    document.currentScript && document.currentScript.src
+      ? document.currentScript.src
+      : "";
+  if (currentSrc) {
+    try {
+      const url = new URL(currentSrc, window.location.href);
+      return normalizeBasePath(url.pathname);
+    } catch (e) {}
+  }
+
+  const script = document.querySelector(
+    'script[src*="movies.min.js"], script[src*="movies.js"]',
+  );
+  const scriptSrc = script && script.src ? script.src : "";
+  if (scriptSrc) {
+    try {
+      const url = new URL(scriptSrc, window.location.href);
+      return normalizeBasePath(url.pathname);
+    } catch (e) {}
+  }
+
+  return normalizeBasePath(window.location.pathname || "/");
+}
+const BASE_PATH = getBasePath();
+function withBase(path) {
+  const raw = String(path || "").trim();
+  if (!raw) return BASE_PATH || "/";
+  if (
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ||
+    raw.startsWith("blob:") ||
+    raw.startsWith("data:")
+  )
+    return raw;
+  const clean = raw.replace(/^\/+/, "");
+  return BASE_PATH ? `${BASE_PATH}/${clean}` : `/${clean}`;
+}
+function apiUrl(path) {
+  const clean = String(path || "").replace(/^\/+/, "");
+  return BASE_PATH ? `${BASE_PATH}/api/${clean}` : `/api/${clean}`;
+}
+function isDesktopClient() {
+  const ua = (navigator.userAgent || "").toLowerCase();
+  const isiOS = /iphone|ipad|ipod/.test(ua);
+  const isAndroid = /android/.test(ua);
+  return !(isiOS || isAndroid);
+}
+function isIOSLike() {
+  const ua = (navigator.userAgent || "").toLowerCase();
+  return (
+    /iphone|ipad|ipod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+function isIPadClient() {
+  const ua = (navigator.userAgent || "").toLowerCase();
+  if (/ipad/.test(ua)) return true;
+  const ipadOS13Plus =
+    navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  if (!ipadOS13Plus) return false;
+  const shortSide = Math.min(
+    window.screen.width || 0,
+    window.screen.height || 0,
+  );
+  return shortSide >= 768;
+}
+function getPreferredPlaybackMode(v) {
+  const name = String(v?.name || "").toLowerCase();
+  const rel = String(v?.relative_path || "").toLowerCase();
+  const path = rel || name;
+  if (path.endsWith(".mkv") || path.endsWith(".ts")) return "plex";
+  const directUrl = String(
+    v?.desktop_stream_url || v?.stream_url || v?.video_url || "",
+  );
+  if (!v?.plex_stream_url) return "direct";
+  if (
+    path.endsWith(".mp4") ||
+    path.endsWith(".m4v") ||
+    path.endsWith(".webm")
+  ) {
+    if (directUrl.includes("?fmp4=1") || directUrl.includes("/hls/"))
+      return "plex";
+    return "direct";
+  }
+  return v?.plex_stream_url ? "plex" : "direct";
+}
+function pickStreamUrl(v) {
+  if (!v) return "";
+  const mode = getPreferredPlaybackMode(v);
+  const directUrl =
+    (isDesktopClient() || isIOSLike()) && v.desktop_stream_url
+      ? v.desktop_stream_url
+      : v.stream_url || v.video_url;
+  if (mode === "plex" && v.plex_stream_url) return withBase(v.plex_stream_url);
+  if (directUrl) return withBase(directUrl);
+  return withBase(v.plex_stream_url || "");
+}
+function pickStreamCandidates(v) {
+  if (!v) return [];
+  const out = [];
+  const seen = new Set();
+  const push = (u) => {
+    const s = String(u || "").trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    out.push(withBase(s));
+  };
+
+  const mode = getPreferredPlaybackMode(v);
+  const name = String(v.name || "").toLowerCase();
+  const rel = String(v.relative_path || "").toLowerCase();
+  const isHeavyContainer =
+    name.endsWith(".mkv") ||
+    name.endsWith(".ts") ||
+    rel.endsWith(".mkv") ||
+    rel.endsWith(".ts");
+  const directUrl =
+    (isDesktopClient() || isIOSLike()) && v.desktop_stream_url
+      ? v.desktop_stream_url
+      : v.stream_url || v.video_url;
+
+  if (mode === "plex") {
+    push(v.plex_stream_url);
+    push(directUrl);
+  } else {
+    push(directUrl);
+    push(v.plex_stream_url);
+  }
+
+  // For MKV/TS, keep soft transcode as last fallback.
+  if (isHeavyContainer) push(v.soft_stream_url);
+
+  return out;
+}
+function autoHideNativeControls() {
+  if (!isIOSLike()) return;
+  const poke = () => {
+    try {
+      mvideo.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          pointerType: "touch",
+        }),
+      );
+    } catch (e) {}
+    try {
+      mvideo.dispatchEvent(
+        new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }),
+      );
+    } catch (e) {}
+    try {
+      mvideo.dispatchEvent(
+        new TouchEvent("touchstart", { bubbles: true, cancelable: true }),
+      );
+    } catch (e) {}
+    try {
+      mvideo.dispatchEvent(
+        new TouchEvent("touchend", { bubbles: true, cancelable: true }),
+      );
+    } catch (e) {}
+    try {
+      mvideo.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    } catch (e) {}
+  };
+  setTimeout(poke, 220);
+  setTimeout(poke, 520);
+}
+let videos = [];
+let filteredVideos = [];
+let folderListCache = [];
+let catalogStatus = { available: true };
+let privateMode = localStorage.getItem("movies_private_mode") === "1";
+let privatePasscode = "";
+function setPrivateMode(v) {
+  privateMode = !!v;
+  localStorage.setItem("movies_private_mode", privateMode ? "1" : "0");
+}
+function getOrCreateDeviceId() {
+  const k = "movies_device_id";
+  let v = localStorage.getItem(k);
+  if (v) return v;
+  v =
+    window.crypto && crypto.randomUUID
+      ? crypto.randomUUID()
+      : "dev-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem(k, v);
+  return v;
+}
+const deviceId = getOrCreateDeviceId();
+let currentSubtitleObjectUrl = null;
+const CACHE_SCHEMA_VERSION = 3;
+const CACHE_DB_NAME = "movies-cache";
+const CACHE_STORE_NAME = "snapshots";
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const CACHE_MAX_RECORDS = 8;
+const CACHE_MAX_BYTES = 18 * 1024 * 1024;
+function deviceHeaders(extra = {}) {
+  return { ...extra, "X-Device-Id": deviceId };
+}
+function openCacheDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) return resolve(null);
+    const req = indexedDB.open(CACHE_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
+        db.createObjectStore(CACHE_STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function cacheGetRaw(key) {
+  const db = await openCacheDb();
+  if (!db) return null;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CACHE_STORE_NAME, "readonly");
+    const req = tx.objectStore(CACHE_STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  }).finally(() => db.close());
+}
+async function cacheSetRaw(key, value) {
+  const db = await openCacheDb();
+  if (!db) return;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CACHE_STORE_NAME, "readwrite");
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.objectStore(CACHE_STORE_NAME).put(value, key);
+  }).finally(() => db.close());
+}
+async function cacheDeleteRaw(key) {
+  const db = await openCacheDb();
+  if (!db) return;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CACHE_STORE_NAME, "readwrite");
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.objectStore(CACHE_STORE_NAME).delete(key);
+  }).finally(() => db.close());
+}
+async function cacheListRecords() {
+  const db = await openCacheDb();
+  if (!db) return [];
+  return new Promise((resolve, reject) => {
+    const out = [];
+    const tx = db.transaction(CACHE_STORE_NAME, "readonly");
+    const store = tx.objectStore(CACHE_STORE_NAME);
+    const req = store.openCursor();
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) {
+        resolve(out);
+        return;
+      }
+      out.push({ key: cursor.key, value: cursor.value });
+      cursor.continue();
+    };
+    req.onerror = () => reject(req.error);
+  }).finally(() => db.close());
+}
+async function cacheClearAll() {
+  const db = await openCacheDb();
+  if (!db) return;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CACHE_STORE_NAME, "readwrite");
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.objectStore(CACHE_STORE_NAME).clear();
+  }).finally(() => db.close());
+}
+function estimateCacheBytes(payload) {
+  try {
+    return new Blob([JSON.stringify(payload)]).size;
+  } catch (e) {
+    return JSON.stringify(payload).length;
+  }
+}
+function currentSnapshotCacheKey() {
+  return JSON.stringify({
+    v: CACHE_SCHEMA_VERSION,
+    deviceId,
+    folder: currentFolderFilter(),
+    q: (q?.value || "").trim(),
+    privateMode: privateMode ? 1 : 0,
+  });
+}
+function stripDeviceIdFromUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return raw;
+  if (/(^|\/)video\/[^/?#]+/i.test(raw)) return raw;
+  try {
+    const u = new URL(raw, window.location.origin);
+    if (/(^|\/)video\/[^/?#]+/i.test(u.pathname)) return raw;
+    u.searchParams.delete("device_id");
+    return u.origin === window.location.origin
+      ? `${u.pathname}${u.search}${u.hash}`
+      : u.toString();
+  } catch (e) {
+    return raw.replace(/([?&])device_id=[^&]*&?/g, "$1").replace(/[?&]$/, "");
+  }
+}
+function normalizeVideoRecord(v) {
+  if (!v || typeof v !== "object") return v;
+  const out = { ...v };
+  for (const key of [
+    "video_url",
+    "stream_url",
+    "desktop_stream_url",
+    "soft_stream_url",
+    "plex_stream_url",
+    "subtitle_url",
+    "thumb_url",
+  ]) {
+    if (out[key]) out[key] = stripDeviceIdFromUrl(out[key]);
+  }
+  if (Array.isArray(out.preview_urls))
+    out.preview_urls = out.preview_urls.map(stripDeviceIdFromUrl);
+  return out;
+}
+async function pruneSnapshotCache() {
+  const now = Date.now();
+  const records = await cacheListRecords();
+  let totalBytes = 0;
+  const keep = [];
+  for (const rec of records) {
+    const value = rec.value || {};
+    const savedAt = Number(value.savedAt || 0);
+    const expired = !savedAt || now - savedAt > CACHE_MAX_AGE_MS;
+    if (expired) {
+      await cacheDeleteRaw(rec.key);
+      continue;
+    }
+    totalBytes += Number(value.bytes || 0);
+    keep.push({
+      key: rec.key,
+      bytes: Number(value.bytes || 0),
+      lastAccessedAt: Number(value.lastAccessedAt || value.savedAt || 0),
+      savedAt,
+    });
+  }
+  if (keep.length <= CACHE_MAX_RECORDS && totalBytes <= CACHE_MAX_BYTES) return;
+  keep.sort((a, b) => {
+    if (a.lastAccessedAt !== b.lastAccessedAt)
+      return a.lastAccessedAt - b.lastAccessedAt;
+    return a.savedAt - b.savedAt;
+  });
+  while (keep.length > CACHE_MAX_RECORDS || totalBytes > CACHE_MAX_BYTES) {
+    const victim = keep.shift();
+    if (!victim) break;
+    totalBytes -= victim.bytes;
+    await cacheDeleteRaw(victim.key);
+  }
+}
+async function loadSnapshotFromCache() {
+  try {
+    const key = currentSnapshotCacheKey();
+    const record = await cacheGetRaw(key);
+    if (!record || !record.payload) return null;
+    const savedAt = Number(record.savedAt || 0);
+    if (!savedAt || Date.now() - savedAt > CACHE_MAX_AGE_MS) {
+      await cacheDeleteRaw(key);
+      return null;
+    }
+    record.lastAccessedAt = Date.now();
+    await cacheSetRaw(key, record);
+    return record.payload;
+  } catch (e) {
+    return null;
+  }
+}
+async function saveSnapshotToCache() {
+  if (!videos.length) return;
+  try {
+    const payload = {
+      catalogStatus,
+      folderListCache,
+      videos,
+      serverTotal,
+      serverOffset,
+      serverExhausted,
+    };
+    await cacheSetRaw(currentSnapshotCacheKey(), {
+      savedAt: Date.now(),
+      lastAccessedAt: Date.now(),
+      bytes: estimateCacheBytes(payload),
+      payload,
+    });
+    await pruneSnapshotCache();
+  } catch (e) {}
+}
+function applyCachedSnapshot(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.videos) || !snapshot.videos.length)
+    return false;
+  catalogStatus = snapshot.catalogStatus || { available: true };
+  folderListCache = Array.isArray(snapshot.folderListCache)
+    ? snapshot.folderListCache
+    : [];
+  videos = snapshot.videos.map(normalizeVideoRecord);
+  filteredVideos = videos;
+  refreshFilteredIndexMap();
+  serverTotal = Number(snapshot.serverTotal || videos.length || 0);
+  serverOffset = Number(snapshot.serverOffset || videos.length || 0);
+  serverExhausted = Boolean(
+    snapshot.serverExhausted || (serverTotal && videos.length >= serverTotal),
+  );
+  prefetchBuffer = [];
+  preloadedThumbUrls.clear();
+  queuedThumbUrls.clear();
+  thumbPrefetchQueue = [];
+  activeThumbPrefetches = 0;
+  suppressFolderChange = true;
+  refreshFolders();
+  suppressFolderChange = false;
+  updatePrivateToggle();
+  render();
+  uiReady = true;
+  scheduleThumbPrefetch();
+  return true;
+}
+function cleanupSubtitleObjectUrl() {
+  if (!currentSubtitleObjectUrl) return;
+  try {
+    URL.revokeObjectURL(currentSubtitleObjectUrl);
+  } catch (e) {}
+  currentSubtitleObjectUrl = null;
+}
+async function resolveSubtitleTrackSrc(url) {
+  const src = String(url || "").trim();
+  if (!src) return "";
+  const res = await fetch(src, { headers: deviceHeaders() });
+  if (!res.ok) throw new Error(`subtitle_${res.status}`);
+  const blob = await res.blob();
+  cleanupSubtitleObjectUrl();
+  currentSubtitleObjectUrl = URL.createObjectURL(blob);
+  return currentSubtitleObjectUrl;
+}
+let renderCount = 0;
+let loadingMore = false;
+let lastScrollY = 0;
+const INITIAL_RENDER_COUNT = 200;
+const RENDER_BATCH_SIZE = 200;
+const RENDER_NEXT_THRESHOLD = 100;
+const API_PAGE_SIZE = 200;
+const BASE_THUMB_PREFETCH_AHEAD = 48;
+const FAST_THUMB_PREFETCH_AHEAD = 120;
+const THUMB_PREFETCH_BEHIND = 16;
+const MAX_THUMB_PREFETCH_CONCURRENCY = 8;
+const PREFETCH_AHEAD_BATCH = 0;
+let serverTotal = 0;
+let serverOffset = 0;
+let serverExhausted = false;
+let fetchingPage = false;
+let activeLoadId = 0;
+let prefetchBuffer = [];
+let suppressFolderChange = false;
+let uiReady = false;
+let loadInFlight = null;
+let lastAppliedFolderValue = "";
+let lastAppliedQueryValue = "";
+const preloadedThumbUrls = new Set();
+const queuedThumbUrls = new Set();
+let thumbPrefetchQueue = [];
+let activeThumbPrefetches = 0;
+let filteredIndexMap = new Map();
+let lastScrollSampleY = 0;
+let lastScrollSampleAt = 0;
+let scrollVelocity = 0;
+let thumbPrefetchTimer = null;
+function updateStat() {
+  const loaded = Math.min(renderCount, filteredVideos.length);
+  const total = serverTotal || filteredVideos.length || loaded;
+  stat.textContent = `Loaded ${loaded} / Total ${total}`;
+}
+
+function drainPrefetchBuffer() {
+  if (!prefetchBuffer.length) return;
+  const seen = new Set(videos.map((v) => v.id));
+  for (const it of prefetchBuffer) {
+    if (!it || !it.id || seen.has(it.id)) continue;
+    seen.add(it.id);
+    videos.push(it);
+  }
+  prefetchBuffer = [];
+  filteredVideos = videos;
+}
+const grid = document.getElementById("grid"),
+  q = document.getElementById("q"),
+  folder = document.getElementById("folderSelect"),
+  folderBtn = document.getElementById("folderBtn"),
+  folderPanel = document.getElementById("folderPanel"),
+  folderSearch = document.getElementById("folderSearch"),
+  folderOptions = document.getElementById("folderOptions"),
+  stat = document.getElementById("stat"),
+  notice = document.getElementById("notice"),
+  tt = document.getElementById("tt"),
+  scrollSentinel = document.getElementById("scrollSentinel");
+const toTopBtn = document.getElementById("toTopBtn");
+const preloadOverlay = document.getElementById("preloadOverlay");
+const modal = document.getElementById("modal"),
+  mbox = modal.querySelector(".box"),
+  mclose = document.getElementById("mclose"),
+  mtitle = document.getElementById("mtitle"),
+  mvideo = document.getElementById("mvideo"),
+  mss = document.getElementById("mss"),
+  msub = document.getElementById("msub"),
+  vloader = document.getElementById("vloader");
+const pmodal = document.getElementById("pmodal"),
+  ppass = document.getElementById("ppass"),
+  pcancel = document.getElementById("pcancel"),
+  pok = document.getElementById("pok");
+const emodal = document.getElementById("emodal"),
+  emsg = document.getElementById("emsg"),
+  eok = document.getElementById("eok");
+let currentSubtitleUrl = null;
+let subtitleEnabled = false;
+let hlsPlayer = null;
+let slideshowEnabled = false;
+let currentVideoId = null;
+let hlsLoadingPromise = null;
+let backgroundPageLoading = false;
+const ENABLE_PREVIEW_FRAMES = true;
+
+function getPreviewFrameUrls(video) {
+  const raw = Array.isArray(video?.preview_urls) ? video.preview_urls : [];
+  return [...new Set(raw.map((u) => withBase(u)).filter(Boolean))];
+}
+
+function preloadPreviewFrames(urls) {
+  // Warm browser HTTP cache only (no JS data/image cache).
+  for (const u of urls) {
+    const im = new Image();
+    im.decoding = "async";
+    im.loading = "eager";
+    im.src = u;
+  }
+}
+
+function showPreloadOverlay() {
+  if (preloadOverlay) preloadOverlay.classList.add("on");
+}
+
+function hidePreloadOverlay() {
+  if (preloadOverlay) preloadOverlay.classList.remove("on");
+}
+
+function loadHlsLibrary() {
+  if (window.Hls) return Promise.resolve(true);
+  if (hlsLoadingPromise) return hlsLoadingPromise;
+  const cdns = [
+    "https://cdn.jsdelivr.net/npm/hls.js@1",
+    "https://unpkg.com/hls.js@1/dist/hls.min.js",
+  ];
+  hlsLoadingPromise = new Promise((resolve) => {
+    let idx = 0;
+    const tryNext = () => {
+      if (window.Hls) return resolve(true);
+      if (idx >= cdns.length) return resolve(false);
+      const s = document.createElement("script");
+      s.src = cdns[idx++];
+      s.async = true;
+      s.onload = () => resolve(!!window.Hls);
+      s.onerror = () => tryNext();
+      document.head.appendChild(s);
+    };
+    tryNext();
+  });
+  return hlsLoadingPromise;
+}
+async function openPlayer(urlOrCandidates, name, subtitleUrl) {
+  if (folderPanel) folderPanel.style.display = "none";
+  const candidates = Array.isArray(urlOrCandidates)
+    ? urlOrCandidates.filter(Boolean)
+    : [urlOrCandidates].filter(Boolean);
+  let activeUrl = candidates[0] || "";
+  const videoId =
+    (String(activeUrl || "").match(/\/(?:video|hls|plex\/video)\/([^/?#]+)/) ||
+      [])[1] || null;
+  currentVideoId = videoId || null;
+  const fallback = videoId ? videos.find((v) => v.id === videoId) : null;
+  const fallbackVideoUrl =
+    fallback && fallback.video_url
+      ? withBase(stripDeviceIdFromUrl(fallback.video_url))
+      : "";
+  const resolvedSubtitle =
+    subtitleUrl !== undefined && subtitleUrl !== null && subtitleUrl !== ""
+      ? subtitleUrl
+      : fallback && fallback.subtitle_url
+        ? withBase(fallback.subtitle_url)
+        : null;
+  console.log("openPlayer called:", {
+    candidates,
+    activeUrl,
+    name,
+    subtitleUrl,
+    resolvedSubtitle,
+    fallbackVideoUrl,
+  });
+  mtitle.textContent = name || "播放";
+  if (hlsPlayer) {
+    try {
+      hlsPlayer.destroy();
+    } catch (e) {}
+    hlsPlayer = null;
+  }
+  mvideo.removeAttribute("src");
+  mvideo.load();
+  const startPlayback = async (url) => {
+    if (!url) {
+      mvideo.src = fallbackVideoUrl || "";
+      return;
+    }
+    if (String(url || "").includes(".m3u8")) {
+      if (mvideo.canPlayType("application/vnd.apple.mpegurl")) {
+        mvideo.src = url || "";
+      } else {
+        const hasHls =
+          window.Hls && window.Hls.isSupported
+            ? window.Hls.isSupported()
+            : false;
+        const loaded = hasHls ? true : await loadHlsLibrary();
+        if (loaded && window.Hls && window.Hls.isSupported()) {
+          let recoverCount = 0;
+          hlsPlayer = new Hls({
+            enableWorker: true,
+            lowLatencyMode: false,
+            backBufferLength: 30,
+            maxBufferLength: 18,
+            maxMaxBufferLength: 24,
+            xhrSetup: (xhr) => {
+              xhr.setRequestHeader("X-Device-Id", deviceId);
+            },
+          });
+          hlsPlayer.on(Hls.Events.ERROR, (ev, data) => {
+            if (!data || !data.fatal) return;
+            if (
+              data.type === Hls.ErrorTypes.NETWORK_ERROR &&
+              recoverCount < 2
+            ) {
+              recoverCount++;
+              try {
+                hlsPlayer.startLoad();
+                return;
+              } catch (e) {}
+            }
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoverCount < 2) {
+              recoverCount++;
+              try {
+                hlsPlayer.recoverMediaError();
+                return;
+              } catch (e) {}
+            }
+            try {
+              hlsPlayer.destroy();
+            } catch (e) {}
+            hlsPlayer = null;
+            mvideo.src = fallbackVideoUrl || "";
+            mvideo.play().catch(() => {});
+          });
+          hlsPlayer.loadSource(url || "");
+          hlsPlayer.attachMedia(mvideo);
+        } else {
+          mvideo.src = fallbackVideoUrl || "";
+        }
+      }
+    } else {
+      mvideo.src = url || "";
+    }
+  };
+  mvideo.querySelectorAll("track").forEach((t) => t.remove());
+  cleanupSubtitleObjectUrl();
+  currentSubtitleUrl = resolvedSubtitle;
+  subtitleEnabled = false;
+  // Hide action buttons during loading
+  msub.style.display = "none";
+  mclose.style.display = "none";
+  if (resolvedSubtitle) {
+    try {
+      const trackSrc = await resolveSubtitleTrackSrc(resolvedSubtitle);
+      const track = document.createElement("track");
+      track.kind = "subtitles";
+      track.label = "Chinese (Traditional)";
+      track.srclang = "zh-TW";
+      track.src = trackSrc;
+      track.default = true;
+      mvideo.appendChild(track);
+      msub.textContent = "CC: On";
+      subtitleEnabled = true;
+    } catch (e) {
+      currentSubtitleUrl = null;
+      msub.style.display = "none";
+    }
+  } else {
+    msub.style.display = "none";
+  }
+  // Loading state: compact loader card
+  const portrait = window.matchMedia("(orientation: portrait)").matches;
+  mbox.style.width =
+    window.innerWidth < 900 ? (portrait ? "250px" : "220px") : "420px";
+  showPreloadOverlay();
+  vloader.classList.remove("on");
+  mvideo.style.display = "none";
+  mvideo.style.visibility = "hidden";
+  let revealed = false;
+  let revealTimer = null;
+  let candidateAttemptId = 0;
+  let candidateFallbackTimer = null;
+  const clearCandidateFallbackTimer = () => {
+    if (!candidateFallbackTimer) return;
+    clearTimeout(candidateFallbackTimer);
+    candidateFallbackTimer = null;
+  };
+  const advanceCandidate = () => {
+    clearCandidateFallbackTimer();
+    if (candidateIdx < candidates.length) {
+      tryNextCandidate();
+      return;
+    }
+    revealPlayer();
+  };
+  const revealPlayer = () => {
+    if (revealed) {
+      relayoutModalBox();
+      return;
+    }
+    revealed = true;
+    try {
+      if (revealTimer) clearTimeout(revealTimer);
+    } catch (e) {}
+    clearCandidateFallbackTimer();
+    hidePreloadOverlay();
+    if (!modal.classList.contains("on")) modal.classList.add("on");
+    vloader.classList.remove("on");
+    mvideo.style.display = "block";
+    mvideo.style.visibility = "hidden";
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        relayoutModalBox();
+        mvideo.style.visibility = "visible";
+        mclose.style.display = "inline-flex";
+        if (resolvedSubtitle) {
+          msub.style.display = "inline-flex";
+          setSubtitleMode(subtitleEnabled);
+        }
+      });
+    });
+  };
+  mvideo.onloadedmetadata = revealPlayer;
+  mvideo.onloadeddata = revealPlayer;
+  mvideo.oncanplay = revealPlayer;
+  mvideo.onplaying = () => {
+    revealPlayer();
+    relayoutModalBox();
+    autoHideNativeControls();
+  };
+  mvideo.onresize = () => {
+    relayoutModalBox();
+  };
+  let candidateIdx = 0;
+  const tryNextCandidate = async () => {
+    const attemptId = ++candidateAttemptId;
+    const next = candidates[candidateIdx++] || fallbackVideoUrl || "";
+    activeUrl = next;
+    clearCandidateFallbackTimer();
+    await startPlayback(next);
+    candidateFallbackTimer = setTimeout(() => {
+      if (attemptId !== candidateAttemptId || revealed) return;
+      advanceCandidate();
+    }, 3200);
+    mvideo.play().catch(() => {
+      if (attemptId !== candidateAttemptId) return;
+      advanceCandidate();
+    });
+  };
+
+  mvideo.onerror = () => {
+    advanceCandidate();
+  };
+  revealTimer = setTimeout(() => {
+    revealPlayer();
+  }, 8000);
+
+  await tryNextCandidate();
+}
+function relayoutModalBox() {
+  if (!modal.classList.contains("on")) return;
+  const vw = Math.max(
+    320,
+    window.innerWidth || document.documentElement.clientWidth || 320,
+  );
+  const vh = Math.max(
+    320,
+    window.innerHeight || document.documentElement.clientHeight || 320,
+  );
+  const chromeH = 56; // top bar height
+  const maxW = Math.floor(vw * 0.96);
+  const maxH = Math.floor(vh * 0.94) - chromeH;
+  const vW = mvideo.videoWidth || 0;
+  const vH = mvideo.videoHeight || 0;
+  if (vW > 0 && vH > 0) {
+    const scale = Math.min(maxW / vW, maxH / vH, 1);
+    const boxW = Math.max(220, Math.floor(vW * scale));
+    mbox.style.width = `${boxW}px`;
+  } else {
+    const portrait = window.matchMedia("(orientation: portrait)").matches;
+    mbox.style.width =
+      window.innerWidth < 900 ? (portrait ? "250px" : "220px") : "420px";
+  }
+}
+function closePlayer() {
+  try {
+    mvideo.pause();
+  } catch (e) {}
+  if (hlsPlayer) {
+    try {
+      hlsPlayer.destroy();
+    } catch (e) {}
+    hlsPlayer = null;
+  }
+  cleanupSubtitleObjectUrl();
+  hidePreloadOverlay();
+  mvideo.removeAttribute("src");
+  mvideo.load();
+  mvideo.style.display = "block";
+  mvideo.style.visibility = "visible";
+  vloader.classList.remove("on");
+  mclose.style.display = "inline-flex";
+  if (currentSubtitleUrl) {
+    msub.style.display = "inline-flex";
+  }
+  mbox.style.width = "";
+  modal.classList.remove("on");
+}
+function playNextInSlideshow() {
+  if (!slideshowEnabled || !currentVideoId) return;
+  const idx = filteredVideos.findIndex((v) => v.id === currentVideoId);
+  if (idx < 0) return;
+  const next = filteredVideos[idx + 1];
+  if (!next) {
+    slideshowEnabled = false;
+    mss.textContent = "Slideshow: Off";
+    return;
+  }
+  const sub = next && next.subtitle_url ? withBase(next.subtitle_url) : null;
+  openPlayer(pickStreamCandidates(next), next.name, sub);
+}
+function setSubtitleMode(on) {
+  const tracks = mvideo.textTracks || [];
+  for (let i = 0; i < tracks.length; i++) {
+    tracks[i].mode = on ? "showing" : "hidden";
+  }
+}
+function toggleSubtitle() {
+  if (!currentSubtitleUrl) return;
+  subtitleEnabled = !subtitleEnabled;
+  setSubtitleMode(subtitleEnabled);
+  msub.textContent = subtitleEnabled ? "CC: On" : "CC: Off";
+}
+function openPassModal() {
+  ppass.value = "";
+  pmodal.classList.add("on");
+  setTimeout(() => ppass.focus(), 30);
+}
+function closePassModal() {
+  pmodal.classList.remove("on");
+}
+function showErrorModal(msg) {
+  emsg.textContent = msg || "發生錯誤";
+  emodal.classList.add("on");
+}
+function closeErrorModal() {
+  emodal.classList.remove("on");
+}
+mclose.addEventListener("click", closePlayer);
+mss.addEventListener("click", () => {
+  slideshowEnabled = !slideshowEnabled;
+  mss.textContent = slideshowEnabled ? "Slideshow: On" : "Slideshow: Off";
+});
+msub.addEventListener("click", toggleSubtitle);
+mvideo.addEventListener("ended", playNextInSlideshow);
+modal.addEventListener("click", (e) => {
+  if (e.target === modal) closePlayer();
+});
+pcancel.addEventListener("click", closePassModal);
+eok.addEventListener("click", closeErrorModal);
+emodal.addEventListener("click", (e) => {
+  if (e.target === emodal) closeErrorModal();
+});
+pok.addEventListener("click", async () => {
+  const code = (ppass.value || "").trim();
+  if (!code) {
+    ppass.focus();
+    return;
+  }
+  let ok = false;
+  try {
+    const r = await fetch(apiUrl("private/unlock"), {
+      method: "POST",
+      headers: deviceHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ passcode: code }),
+    });
+    ok = !!r.ok;
+  } catch (e) {}
+  if (!ok) {
+    showErrorModal("Wrong passcode");
+    return;
+  }
+  setPrivateMode(true);
+  privatePasscode = "";
+  closePassModal();
+
+  // wait a short moment for backend authorized-state visibility, then reload.
+  try {
+    for (let i = 0; i < 4; i++) {
+      const sr = await fetch(apiUrl("status"), { headers: deviceHeaders() });
+      const sj = await sr.json().catch(() => ({}));
+      if (sj && sj.private_authorized) break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  } catch (e) {}
+
+  await cacheClearAll().catch(() => {});
+  await load(true);
+});
+ppass.addEventListener("keydown", async (e) => {
+  if (e.key === "Enter") {
+    pok.click();
+  }
+  if (e.key === "Escape") {
+    closePassModal();
+  }
+});
+pmodal.addEventListener("click", (e) => {
+  if (e.target === pmodal) closePassModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && modal.classList.contains("on")) closePlayer();
+});
+const aspectMap = {};
+let relayoutTimer = null;
+const TARGET_ROW_H = 260;
+const MIN_ROW_H = 190;
+const MAX_ROW_H = 340;
+let pendingRow = [];
+let pendingSumAr = 0;
+
+function getLayoutAr(v) {
+  const ar = Number(v?.ar || 0);
+  if (ar > 0) return ar;
+  return aspectMap[v?.id] || 1.6;
+}
+
+function isMobileLayout() {
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  return window.innerWidth < 1000 || coarse;
+}
+
+let currentMobileCols = 4;
+function updateMobileCols() {
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const landscape = window.matchMedia("(orientation: landscape)").matches;
+  let cols = 4;
+  if (coarse && landscape && isIPadClient() && window.innerWidth >= 900)
+    cols = 8;
+  else if (coarse && !landscape && isIPadClient()) cols = 6;
+  else if (coarse && landscape) cols = 6;
+  currentMobileCols = cols;
+  grid.style.setProperty("--mobile-cols", String(cols));
+  return cols;
+}
+
+function scheduleRelayout() {
+  if (relayoutTimer) clearTimeout(relayoutTimer);
+  relayoutTimer = setTimeout(() => {
+    relayoutTimer = null;
+    buildRows(filteredVideos.slice(0, renderCount), {
+      append: false,
+      isFinal: renderCount >= filteredVideos.length && serverExhausted,
+    });
+  }, 80);
+}
+
+function bindCardEvents(scope) {
+  scope.querySelectorAll(".card button").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const card = e.target.closest("article.card");
+      if (card) {
+        const v = videos.find((x) => x.id === card.dataset.id);
+        const sub = v && v.subtitle_url ? withBase(v.subtitle_url) : null;
+        openPlayer(pickStreamCandidates(v), card.dataset.name, sub);
+      }
+    });
+  });
+  const pointerCoarse = window.matchMedia("(pointer: coarse)").matches;
+  const pointerHover = window.matchMedia("(hover: hover)").matches;
+  scope
+    .querySelectorAll("article.card .name, article.card .sub")
+    .forEach((el) => {
+      const show = (e) => {
+        const txt = el.getAttribute("data-fullname") || el.textContent || "";
+        if (!txt) return;
+        tt.textContent = txt;
+        tt.style.display = "block";
+        tt.style.left = `${Math.min(window.innerWidth - 20, e.clientX + 12)}px`;
+        tt.style.top = `${Math.min(window.innerHeight - 20, e.clientY + 18)}px`;
+      };
+      const move = (e) => {
+        if (tt.style.display === "block") {
+          tt.style.left = `${Math.min(window.innerWidth - 20, e.clientX + 12)}px`;
+          tt.style.top = `${Math.min(window.innerHeight - 20, e.clientY + 18)}px`;
+        }
+      };
+      const hide = () => {
+        tt.style.display = "none";
+      };
+      el.addEventListener("mouseenter", show);
+      el.addEventListener("mousemove", move);
+      el.addEventListener("mouseleave", hide);
+    });
+  scope.querySelectorAll("article.card img.thumb").forEach((img) => {
+    let timer = null,
+      idx = 0,
+      original = img.getAttribute("src");
+    const card = img.closest("article.card");
+    const vid = card ? card.dataset.id : null;
+    const syncAspect = () => {
+      if (!img.naturalWidth || !img.naturalHeight || !vid) return;
+      const ar = img.naturalWidth / img.naturalHeight;
+      const prevAr = aspectMap[vid] || 0;
+      aspectMap[vid] = ar;
+      if (!isMobileLayout() && prevAr > 0 && Math.abs(prevAr - ar) > 0.08) {
+        scheduleRelayout();
+      }
+    };
+    if (img.complete) setTimeout(syncAspect, 0);
+    else img.addEventListener("load", syncAspect, { once: true });
+    const getVideo = () => {
+      if (!card) return null;
+      return videos.find((v) => v.id === card.dataset.id) || null;
+    };
+    const startPreview = () => {
+      if (!ENABLE_PREVIEW_FRAMES) return;
+      if (timer) return; // guard: avoid stacked intervals on repeated hover/click bindings
+      const v = getVideo();
+      if (!v || !v.preview_urls || v.preview_urls.length === 0) return;
+      const frames = getPreviewFrameUrls(v);
+      if (!frames.length) return;
+      preloadPreviewFrames(frames);
+      original = img.getAttribute("src");
+      idx = 0;
+
+      if (frames.length === 1) {
+        const next = frames[0];
+        if (img.dataset.previewSrc !== next) {
+          img.src = next;
+          img.dataset.previewSrc = next;
+        }
+        return;
+      }
+
+      timer = setInterval(() => {
+        const next = frames[idx % frames.length];
+        idx++;
+        if (img.dataset.previewSrc !== next) {
+          img.src = next;
+          img.dataset.previewSrc = next;
+        }
+      }, 320);
+    };
+    const stopPreview = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (img.getAttribute("src") !== original) img.src = original;
+      delete img.dataset.previewSrc;
+    };
+    if (pointerCoarse) {
+      img.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const c = img.closest("article.card");
+        if (!c) return;
+        const now = Date.now();
+        const last = Number(c.dataset.lastTap || 0);
+        const armed = c.dataset.tapArmed === "1";
+        const previewActive = c.dataset.previewActive === "1";
+        if (previewActive || (armed && now - last < 1800)) {
+          const v = videos.find((x) => x.id === c.dataset.id);
+          const sub = v && v.subtitle_url ? withBase(v.subtitle_url) : null;
+          c.dataset.tapArmed = "0";
+          c.dataset.lastTap = "0";
+          c.dataset.previewActive = "0";
+          stopPreview();
+          openPlayer(pickStreamCandidates(v), c.dataset.name, sub);
+          return;
+        }
+        c.dataset.tapArmed = "1";
+        c.dataset.lastTap = String(now);
+        c.dataset.previewActive = "1";
+        stopPreview();
+        startPreview();
+        // keep preview looping until user taps this card again to play
+      });
+    } else {
+      if (pointerHover) {
+        img.addEventListener("mouseenter", startPreview);
+        img.addEventListener("mouseleave", stopPreview);
+      }
+      img.addEventListener("click", () => {
+        const c = img.closest("article.card");
+        if (c) {
+          const v = videos.find((x) => x.id === c.dataset.id);
+          const sub = v && v.subtitle_url ? withBase(v.subtitle_url) : null;
+          openPlayer(pickStreamCandidates(v), c.dataset.name, sub);
+        }
+      });
+    }
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function cardHtml(v, w, h) {
+  const cw = Math.max(120, Math.round(w));
+  const safeName = escapeHtml(v.name);
+  const safeFolder = escapeHtml(v.folder);
+  const safeSize = escapeHtml(v.size);
+  return `<article class='card' style='width:${cw}px' data-rowh='${Math.round(h)}' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}' style='height:${Math.round(h)}px'/><div class='meta'><div class='name' title='${safeName}' data-fullname='${safeName}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='播放' title='播放'>▶</button></div></div></article>`;
+}
+
+function buildRows(items, { append = false, isFinal = false } = {}) {
+  updateMobileCols();
+  const mobile = isMobileLayout();
+  grid.classList.toggle("mobile", mobile);
+  if (!append) {
+    grid.innerHTML = "";
+    pendingRow = [];
+    pendingSumAr = 0;
+  }
+  if (!items.length) {
+    if (!append) updateStat();
+    return;
+  }
+
+  if (mobile) {
+    const wrap = document.createElement("div");
+    wrap.className = "jrow";
+    wrap.innerHTML = items
+      .map((v) => {
+        const safeName = escapeHtml(v.name);
+        const safeFolder = escapeHtml(v.folder);
+        const safeSize = escapeHtml(v.size);
+        return `<article class='card' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}'/><div class='meta'><div class='name' title='${safeName}' data-fullname='${safeName}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='播放' title='播放'>▶</button></div></div></article>`;
+      })
+      .join("");
+    bindCardEvents(wrap);
+    while (wrap.firstChild) grid.appendChild(wrap.firstChild);
+    updateStat();
+    return;
+  }
+
+  const W = Math.max(
+    320,
+    Math.floor(
+      (grid.getBoundingClientRect().width ||
+        grid.clientWidth ||
+        window.innerWidth) - 2,
+    ),
+  );
+  const GAP = 14;
+  let row = append ? [...pendingRow] : [];
+  let sumAr = append ? pendingSumAr : 0;
+
+  const flush = (isLast = false) => {
+    if (!row.length) return;
+    let h = TARGET_ROW_H;
+    if (!isLast) {
+      h = (W - GAP * (row.length - 1)) / sumAr;
+      h = Math.max(MIN_ROW_H, Math.min(MAX_ROW_H, h));
+    }
+    const r = document.createElement("div");
+    r.className = "jrow";
+    r.innerHTML = row
+      .map((v) => {
+        const ar = getLayoutAr(v);
+        return cardHtml(v, ar * h, h);
+      })
+      .join("");
+    bindCardEvents(r);
+    grid.appendChild(r);
+    row = [];
+    sumAr = 0;
+  };
+
+  for (const v of items) {
+    const ar = getLayoutAr(v);
+    row.push(v);
+    sumAr += ar;
+    const projected = sumAr * TARGET_ROW_H + GAP * (row.length - 1);
+    if (projected >= W && row.length >= 2) flush(false);
+  }
+
+  // For intermediate chunks, keep incomplete row for next chunk to avoid ugly right blank.
+  if (isFinal) {
+    flush(true);
+    pendingRow = [];
+    pendingSumAr = 0;
+  } else {
+    pendingRow = row;
+    pendingSumAr = sumAr;
+  }
+
+  updateStat();
+}
+
+function refreshFilteredIndexMap() {
+  filteredIndexMap = new Map(filteredVideos.map((v, i) => [v.id, i]));
+}
+
+function queueThumbPrefetch(url) {
+  const u = String(url || "").trim();
+  if (!u || preloadedThumbUrls.has(u) || queuedThumbUrls.has(u)) return;
+  queuedThumbUrls.add(u);
+  thumbPrefetchQueue.push(u);
+}
+
+function pumpThumbPrefetchQueue() {
+  while (
+    activeThumbPrefetches < MAX_THUMB_PREFETCH_CONCURRENCY &&
+    thumbPrefetchQueue.length
+  ) {
+    const next = thumbPrefetchQueue.shift();
+    if (!next) continue;
+    queuedThumbUrls.delete(next);
+    if (preloadedThumbUrls.has(next)) continue;
+    preloadedThumbUrls.add(next);
+    activeThumbPrefetches++;
+    const im = new Image();
+    im.decoding = "async";
+    im.loading = "eager";
+    const finish = () => {
+      activeThumbPrefetches = Math.max(0, activeThumbPrefetches - 1);
+      pumpThumbPrefetchQueue();
+    };
+    im.onload = finish;
+    im.onerror = finish;
+    im.src = next;
+  }
+}
+
+function getRenderedRange() {
+  const cards = grid.querySelectorAll("article.card[data-id]");
+  if (!cards.length)
+    return {
+      start: 0,
+      end: Math.max(0, Math.min(renderCount, filteredVideos.length) - 1),
+    };
+  const viewportTop = -window.innerHeight * 0.5;
+  const viewportBottom = window.innerHeight * 1.5;
+  let start = null;
+  let end = null;
+  for (const card of cards) {
+    const rect = card.getBoundingClientRect();
+    if (rect.bottom < viewportTop || rect.top > viewportBottom) continue;
+    const idx = filteredIndexMap.get(card.dataset.id);
+    if (idx === undefined) continue;
+    if (start === null || idx < start) start = idx;
+    if (end === null || idx > end) end = idx;
+  }
+  if (start === null || end === null) {
+    const firstIdx = filteredIndexMap.get(cards[0]?.dataset.id) ?? 0;
+    const lastIdx =
+      filteredIndexMap.get(cards[cards.length - 1]?.dataset.id) ?? firstIdx;
+    return { start: firstIdx, end: lastIdx };
+  }
+  return { start, end };
+}
+
+function scheduleThumbPrefetch() {
+  if (thumbPrefetchTimer) clearTimeout(thumbPrefetchTimer);
+  thumbPrefetchTimer = setTimeout(() => {
+    thumbPrefetchTimer = null;
+    if (!filteredVideos.length) return;
+    const { start, end } = getRenderedRange();
+    const movingFast = scrollVelocity > 1200;
+    const ahead = movingFast
+      ? FAST_THUMB_PREFETCH_AHEAD
+      : BASE_THUMB_PREFETCH_AHEAD;
+    const targetStart = Math.max(0, start - THUMB_PREFETCH_BEHIND);
+    const targetEnd = Math.min(filteredVideos.length, end + ahead);
+    for (let i = targetStart; i < targetEnd; i++) {
+      const u = withBase(filteredVideos[i]?.thumb_url || "");
+      queueThumbPrefetch(u);
+    }
+    pumpThumbPrefetchQueue();
+  }, 60);
+}
+
+async function preloadAllPages(loadId = activeLoadId) {
+  while (loadId === activeLoadId && !serverExhausted) {
+    await fetchNextPage(loadId, { render: false });
+  }
+}
+
+function renderChunk(reset = false, batchSize = RENDER_BATCH_SIZE) {
+  if (loadingMore && !reset) return;
+  loadingMore = true;
+  let prevCount = renderCount;
+  if (reset) {
+    renderCount = 0;
+    prevCount = 0;
+  }
+  const step = reset ? INITIAL_RENDER_COUNT : batchSize;
+  renderCount = Math.min(filteredVideos.length, renderCount + step);
+  const slice = filteredVideos.slice(prevCount, renderCount);
+  const trulyFinal = renderCount >= filteredVideos.length && serverExhausted;
+  buildRows(slice, { append: !reset, isFinal: trulyFinal });
+  scheduleThumbPrefetch();
+  loadingMore = false;
+}
+
+function nearBottom() {
+  const y = window.scrollY || window.pageYOffset || 0;
+  const docH = Math.max(
+    document.body.scrollHeight,
+    document.documentElement.scrollHeight,
+  );
+  return window.innerHeight + y >= docH - 260;
+}
+
+function nearMiddle() {
+  const y = window.scrollY || window.pageYOffset || 0;
+  const docH = Math.max(
+    document.body.scrollHeight,
+    document.documentElement.scrollHeight,
+  );
+  const maxScroll = Math.max(1, docH - window.innerHeight);
+  return y >= maxScroll * 0.5;
+}
+
+async function ensurePrefetchAhead(loadId = activeLoadId) {
+  if (PREFETCH_AHEAD_BATCH <= 0) return;
+  if (loadId !== activeLoadId) return;
+  if (serverExhausted) return;
+  // Keep at least one API batch buffered ahead of rendered items.
+  while (loadId === activeLoadId && !serverExhausted && !fetchingPage) {
+    const ahead = Math.max(
+      0,
+      filteredVideos.length + prefetchBuffer.length - renderCount,
+    );
+    if (ahead >= PREFETCH_AHEAD_BATCH) break;
+    await fetchNextPage(loadId, { render: false });
+    if (fetchingPage) break;
+  }
+}
+
+async function ensureAutoLoad() {
+  if (loadingMore) return;
+  const remainingLoaded = Math.max(0, filteredVideos.length - renderCount);
+  const shouldAdvanceRender =
+    remainingLoaded <= RENDER_NEXT_THRESHOLD || nearMiddle();
+  if (shouldAdvanceRender && renderCount < filteredVideos.length) {
+    renderChunk(false, RENDER_BATCH_SIZE);
+  }
+}
+
+function render() {
+  // Safety filter on client side too (prevents mixed batches during race/reload).
+  const f = currentFolderFilter();
+  const needle = (q?.value || "").trim().toLowerCase();
+  filteredVideos = videos.filter((v) => {
+    const okFolder = !f || String(v.folder || "") === f;
+    const okName =
+      !needle ||
+      String(v.name || "")
+        .toLowerCase()
+        .includes(needle);
+    return okFolder && okName;
+  });
+  refreshFilteredIndexMap();
+  if (catalogStatus && catalogStatus.available === false) {
+    notice.style.display = "block";
+    notice.textContent = `Library not ready. Waiting for mounted disks: ${(catalogStatus.roots || []).join(", ")}`;
+  } else {
+    notice.style.display = "none";
+    notice.textContent = "";
+  }
+  renderChunk(true);
+}
+
+function getSavedFolderSelection() {
+  return localStorage.getItem("movies_folder") || "";
+}
+
+function saveFolderSelection(value) {
+  localStorage.setItem("movies_folder", value || "");
+}
+
+function renderFolderOptions() {
+  const source = folderListCache.length
+    ? folderListCache
+    : [...new Set(videos.map((v) => v.folder))].sort();
+  const all = ["", ...source];
+  const kw = (folderSearch?.value || "").trim().toLowerCase();
+  const list = kw ? all.filter((f) => !f || f.toLowerCase().includes(kw)) : all;
+  folderOptions.innerHTML = list
+    .map((f) => {
+      const label = f || "All folders";
+      const active = folder.value === f ? " active" : "";
+      return `<button type='button' class='folder-opt${active}' data-val='${escapeHtml(f)}'>${escapeHtml(label)}</button>`;
+    })
+    .join("");
+  folderOptions.querySelectorAll(".folder-opt").forEach((b) => {
+    b.addEventListener("click", () => {
+      folder.value = b.dataset.val || "";
+      saveFolderSelection(folder.value);
+      folderBtn.textContent = folder.value || "All folders";
+      folderPanel.style.display = "none";
+      load();
+    });
+  });
+}
+
+function refreshFolders() {
+  const selected = folder.value || getSavedFolderSelection();
+  const set = folderListCache.length
+    ? folderListCache
+    : [...new Set(videos.map((v) => v.folder))].sort();
+  folder.innerHTML =
+    `<option value=''>All folders</option>` +
+    set.map((f) => `<option value="${f}">${f}</option>`).join("");
+  if (selected && set.includes(selected)) {
+    folder.value = selected;
+  } else {
+    folder.value = "";
+  }
+  folderBtn.textContent = folder.value || "All folders";
+  renderFolderOptions();
+}
+function videosApiPath() {
+  return "videos";
+}
+function foldersApiPath() {
+  return "folders";
+}
+function updatePrivateToggle() {
+  const btn = document.getElementById("privateToggle");
+  const enabled = !!(catalogStatus && catalogStatus.private_enabled);
+  const authorized = !!(catalogStatus && catalogStatus.private_authorized);
+  btn.disabled = !enabled;
+  btn.style.opacity = enabled ? "1" : "0.5";
+  // UI strictly follows server auth state to avoid stale local state.
+  btn.classList.toggle("on", authorized);
+  btn.title = authorized ? "Private Mode: On" : "Private Mode: Off";
+}
+function currentFolderFilter() {
+  const live = (folder?.value || "").trim();
+  if (live) return live;
+  return (getSavedFolderSelection() || "").trim();
+}
+
+function buildVideosQuery(limit, offset) {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  const f = currentFolderFilter();
+  const kw = (q?.value || "").trim();
+  if (f) params.set("folder", f);
+  if (kw) params.set("q", kw);
+  return `${videosApiPath()}?${params.toString()}`;
+}
+
+async function fetchNextPage(loadId = activeLoadId, opts = {}) {
+  const shouldRender = opts.render !== false;
+  if (loadId !== activeLoadId) return;
+  if (fetchingPage || serverExhausted) return;
+  const reqOffset = serverOffset;
+  fetchingPage = true;
+  try {
+    const headers = deviceHeaders();
+    const rr = await fetch(
+      apiUrl(buildVideosQuery(API_PAGE_SIZE, serverOffset)),
+      { headers },
+    );
+    if (!rr.ok) return;
+    const rj = await rr.json();
+    if (loadId !== activeLoadId) return;
+    const items = Array.isArray(rj?.items) ? rj.items : [];
+    const total = Number(rj?.total || 0);
+    serverTotal = total || serverTotal;
+    if (!items.length) {
+      serverExhausted = true;
+      return;
+    }
+    const seen = new Set(videos.map((v) => v.id));
+    const incoming = [];
+    for (const it of items) {
+      if (!it || !it.id || seen.has(it.id)) continue;
+      seen.add(it.id);
+      incoming.push(normalizeVideoRecord(it));
+    }
+    for (const it of incoming) videos.push(it);
+
+    const respOffset = Number(rj?.offset ?? reqOffset);
+    serverOffset = respOffset + items.length;
+    if (serverOffset >= serverTotal || videos.length >= serverTotal)
+      serverExhausted = true;
+    filteredVideos = videos;
+    if (shouldRender) {
+      // Rebuild from all loaded items to avoid losing earlier pages in incremental append path.
+      const keepScrollY = window.scrollY || window.pageYOffset || 0;
+      renderCount = filteredVideos.length;
+      refreshFilteredIndexMap();
+      buildRows(filteredVideos, { append: false, isFinal: serverExhausted });
+      requestAnimationFrame(() => {
+        window.scrollTo(0, keepScrollY);
+        scheduleThumbPrefetch();
+      });
+    } else {
+      updateStat();
+      scheduleThumbPrefetch();
+    }
+  } finally {
+    fetchingPage = false;
+  }
+}
+
+async function load(forceNetwork = false) {
+  if (loadInFlight) return loadInFlight;
+  loadInFlight = (async () => {
+    activeLoadId += 1;
+    const loadId = activeLoadId;
+    const headers = deviceHeaders();
+
+    // Apply persisted folder filter immediately so first page query is consistent after refresh.
+    const savedFolder = getSavedFolderSelection();
+    if (savedFolder && folder) {
+      try {
+        folder.value = savedFolder;
+        folderBtn.textContent = savedFolder;
+      } catch (e) {}
+    }
+    if (!forceNetwork) {
+      const cached = await loadSnapshotFromCache();
+      if (cached && applyCachedSnapshot(cached)) {
+        loadInFlight = null;
+        return;
+      }
+    }
+    const sr = await fetch(apiUrl("status"), { headers });
+    catalogStatus = await sr.json();
+    if (catalogStatus && catalogStatus.private_authorized) setPrivateMode(true);
+    updatePrivateToggle();
+
+    try {
+      const fr = await fetch(apiUrl(foldersApiPath()), { headers });
+      if (fr.ok) {
+        const fjson = await fr.json();
+        folderListCache = Array.isArray(fjson?.folders) ? fjson.folders : [];
+        suppressFolderChange = true;
+        refreshFolders();
+        suppressFolderChange = false;
+      }
+    } catch (e) {
+      suppressFolderChange = false;
+    }
+
+    lastAppliedFolderValue = folder?.value || "";
+    lastAppliedQueryValue = (q?.value || "").trim();
+
+    videos = [];
+    filteredVideos = videos;
+    refreshFilteredIndexMap();
+    prefetchBuffer = [];
+    preloadedThumbUrls.clear();
+    queuedThumbUrls.clear();
+    thumbPrefetchQueue = [];
+    activeThumbPrefetches = 0;
+    renderCount = 0;
+    serverTotal = 0;
+    serverOffset = 0;
+    serverExhausted = false;
+
+    try {
+      await fetchNextPage(loadId, { render: false });
+      renderChunk(true);
+      await ensurePrefetchAhead(loadId);
+      // Eagerly load all remaining pages upfront; scrolling does render only.
+      await preloadAllPages(loadId);
+      await saveSnapshotToCache();
+      uiReady = true;
+    } finally {
+      loadInFlight = null;
+    }
+  })();
+  return loadInFlight;
+}
+const themeSel = document.getElementById("themeSel");
+function applyTheme(v) {
+  document.body.setAttribute("data-theme", v || "neo-dark");
+}
+themeSel.addEventListener("change", () => {
+  localStorage.setItem("movies_theme", themeSel.value);
+  applyTheme(themeSel.value);
+});
+const savedTheme = localStorage.getItem("movies_theme") || "neo-dark";
+themeSel.value = savedTheme;
+applyTheme(savedTheme);
+let searchTimer = null;
+q.addEventListener("input", () => {
+  if (!uiReady) return;
+  const next = (q?.value || "").trim();
+  if (next === lastAppliedQueryValue) return;
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => load(), 220);
+});
+folder.addEventListener("change", () => {
+  if (!uiReady) return;
+  if (suppressFolderChange) return;
+  const next = folder.value || "";
+  if (next === lastAppliedFolderValue) return;
+  saveFolderSelection(next);
+  folderBtn.textContent = next || "All folders";
+  renderFolderOptions();
+  load();
+});
+folderBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const open = folderPanel.style.display !== "none";
+  folderPanel.style.display = open ? "none" : "block";
+  if (!open) {
+    folderSearch.value = "";
+    renderFolderOptions();
+    // Avoid mobile keyboard popup: blur any focused input when opening panel.
+    try {
+      if (document.activeElement && document.activeElement.blur)
+        document.activeElement.blur();
+    } catch (err) {}
+  }
+});
+folderSearch.addEventListener("input", renderFolderOptions);
+const closeFolderPanelIfOutside = (e) => {
+  const wrap = document.getElementById("folder");
+  if (!wrap || !folderPanel || folderPanel.style.display === "none") return;
+  if (!wrap.contains(e.target)) folderPanel.style.display = "none";
+};
+// Use pointer/touch capture so mobile taps outside close the panel immediately.
+document.addEventListener("pointerdown", closeFolderPanelIfOutside, true);
+document.addEventListener("touchstart", closeFolderPanelIfOutside, true);
+document.addEventListener("click", closeFolderPanelIfOutside, true);
+window.addEventListener("scroll", () => {
+  const y = window.scrollY || window.pageYOffset || 0;
+  const goingDown = y >= lastScrollY;
+  const now = performance.now();
+  if (lastScrollSampleAt) {
+    const dt = Math.max(1, now - lastScrollSampleAt);
+    scrollVelocity = Math.abs(((y - lastScrollSampleY) * 1000) / dt);
+  }
+  lastScrollSampleY = y;
+  lastScrollSampleAt = now;
+  lastScrollY = y;
+  if (toTopBtn) toTopBtn.classList.toggle("show", y > 260);
+  if (!goingDown) return;
+  ensureAutoLoad();
+  scheduleThumbPrefetch();
+});
+if (toTopBtn) {
+  toTopBtn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+let lastResizeW = window.innerWidth;
+let resizeTimer = null;
+const relayoutNow = () => {
+  buildRows(filteredVideos.slice(0, renderCount), {
+    append: false,
+    isFinal: renderCount >= filteredVideos.length,
+  });
+  queueMicrotask(ensureAutoLoad);
+};
+window.addEventListener("resize", () => {
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const landscape = window.matchMedia("(orientation: landscape)").matches;
+  const w = window.innerWidth;
+  const widthDelta = Math.abs(w - lastResizeW);
+  lastResizeW = w;
+  const threshold = coarse && landscape ? 120 : 48;
+  if (coarse && widthDelta < threshold) {
+    updateMobileCols();
+    setTimeout(relayoutModalBox, 80);
+    return;
+  }
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    relayoutNow();
+    relayoutModalBox();
+  }, 140);
+});
+window.addEventListener("orientationchange", () => {
+  const prevCols = currentMobileCols;
+  const nextCols = updateMobileCols();
+  if (prevCols !== nextCols) {
+    setTimeout(relayoutNow, 90);
+    setTimeout(relayoutNow, 320);
+  } else {
+    setTimeout(updateMobileCols, 120);
+  }
+  setTimeout(relayoutModalBox, 120);
+  setTimeout(relayoutModalBox, 360);
+});
+if (window.visualViewport && window.visualViewport.addEventListener) {
+  window.visualViewport.addEventListener("resize", () => {
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    if (!coarse) return;
+    const prevCols = currentMobileCols;
+    const nextCols = updateMobileCols();
+    if (prevCols !== nextCols) {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(relayoutNow, 140);
+    }
+  });
+}
+if ("IntersectionObserver" in window && scrollSentinel) {
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const ent of entries) {
+        if (ent.isIntersecting) {
+          ensureAutoLoad();
+        }
+      }
+    },
+    { root: null, rootMargin: "360px 0px", threshold: 0.01 },
+  );
+  io.observe(scrollSentinel);
+}
+document.getElementById("rescan").addEventListener("click", async () => {
+  await fetch(withBase("rescan"), { headers: deviceHeaders() });
+  await cacheClearAll().catch(() => {});
+  setTimeout(() => load(true), 800);
+});
+document.getElementById("privateToggle").addEventListener("click", async () => {
+  const authorized = !!(catalogStatus && catalogStatus.private_authorized);
+  if (authorized) {
+    // Optimistic lock UX: reflect locked state immediately.
+    setPrivateMode(false);
+    privatePasscode = "";
+    // Reset folder selection to avoid stuck private folder after lock.
+    saveFolderSelection("");
+    if (folder) folder.value = "";
+    if (folderBtn) folderBtn.textContent = "All folders";
+    if (catalogStatus) catalogStatus.private_authorized = false;
+    updatePrivateToggle();
+    try {
+      await fetch(apiUrl("private/lock"), {
+        method: "POST",
+        headers: deviceHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({}),
+      });
+    } catch (e) {}
+    await cacheClearAll().catch(() => {});
+    await load(true);
+    return;
+  }
+  openPassModal();
+});
+
+// Force-disable zoom on all devices/browsers
+let lastTouchEnd = 0;
+document.addEventListener("gesturestart", (e) => e.preventDefault(), {
+  passive: false,
+});
+document.addEventListener("gesturechange", (e) => e.preventDefault(), {
+  passive: false,
+});
+document.addEventListener("gestureend", (e) => e.preventDefault(), {
+  passive: false,
+});
+document.addEventListener(
+  "touchstart",
+  (e) => {
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  },
+  { passive: false },
+);
+document.addEventListener(
+  "touchend",
+  (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 320) e.preventDefault();
+    lastTouchEnd = now;
+  },
+  { passive: false },
+);
+window.addEventListener(
+  "wheel",
+  (e) => {
+    if (e.ctrlKey) e.preventDefault();
+  },
+  { passive: false },
+);
+window.addEventListener(
+  "keydown",
+  (e) => {
+    if ((e.ctrlKey || e.metaKey) && ["+", "=", "-", "0"].includes(e.key))
+      e.preventDefault();
+  },
+  { passive: false },
+);
+
+if (!window.__mirandaMoviesBooted) {
+  window.__mirandaMoviesBooted = true;
+  updatePrivateToggle();
+  load();
+}
