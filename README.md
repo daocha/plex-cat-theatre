@@ -33,6 +33,7 @@ It is designed for:
 
 - The built-in debug panel lives in the bottom-right, stays fully visible on load, and slides to the nearest edge when you drag it far enough (~30% hidden). Tap the exposed edge to slide it back in without changing its vertical position, and a small dot reminds you the panel is off-screen.
 - Video playback automatically chooses the safer path: direct play for supported browsers, Plex HLS for heavy containers, and manual toggles are stored per-video in IndexedDB with no TTL.
+- On touch devices, the toolbar now exposes zoom controls that let you toggle between the default grid (level 1) and a denser level 2 that caps rows at 3/6 images on phones and 4/6 on an iPad, with each row fitting the width and keeping the featured height consistent.
 - Cached thumbnails and metadata respect your browser storage limits while keeping frequently-used results fresh.
 
 ## Project Structure
