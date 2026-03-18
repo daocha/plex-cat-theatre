@@ -59,7 +59,12 @@ plex_adapter: PlexAdapter | None = None
 APP_INSTANCE = None
 ON_DEMAND_TRANSCODE = False
 HWACCEL_CODEC = "h264_videotoolbox"
-cfg_runtime = {"on_demand_hls": False}
+cfg_runtime = {
+    "on_demand_hls": False,
+    "direct_playback_enabled": True,
+    "direct_audio_whitelist": {"aac", "mp3"},
+    "debug_enabled": False,
+}
 APPROVED_PRIVATE_DEVICES: set[str] = set()
 PRIVATE_STATE_LOCK = threading.Lock()
 AUTH_STATE_LOCK = threading.Lock()
@@ -74,6 +79,14 @@ def add_csp_headers(resp):
         "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
         "connect-src 'self' data: blob: https://cdn.jsdelivr.net; worker-src 'self' blob:;",
     )
+    return resp
+
+
+@app.after_request
+def persist_device_cookie(resp):
+    device_id = extract_device_id()
+    if device_id:
+        resp = apply_device_cookie(resp, device_id=device_id)
     return resp
 
 
@@ -131,6 +144,62 @@ def build_plex_hls_proxy_url(
         ) + "?"
     query = urllib.parse.urlencode({"u": clean_target, "root": mount_root or ""})
     return proxy_path + query
+
+
+def _ass_time_to_vtt(value: str) -> str:
+    raw = str(value or "").strip()
+    match = re.match(r"(?:(\d+):)?(\d{1,2}):(\d{2})[.](\d{1,2})", raw)
+    if not match:
+        return "00:00:00.000"
+    hours = int(match.group(1) or 0)
+    minutes = int(match.group(2) or 0)
+    seconds = int(match.group(3) or 0)
+    centis = int(match.group(4) or 0)
+    millis = centis * 10
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
+
+
+def _strip_ass_text_markup(text: str) -> str:
+    out = str(text or "")
+    out = out.replace("\\N", "\n").replace("\\n", "\n").replace("\\h", " ")
+    out = re.sub(r"\{[^}]*\}", "", out)
+    return out.strip()
+
+
+def normalize_subtitle_to_vtt(body: bytes, content_type: str = "") -> bytes:
+    raw = body or b""
+    text = raw.decode("utf-8", errors="ignore").lstrip("\ufeff")
+    if not text.strip():
+        return b"WEBVTT\n\n"
+
+    if text.lstrip().startswith("WEBVTT"):
+        return text.encode("utf-8")
+
+    lowered_ctype = str(content_type or "").lower()
+    lowered_text = text.lower()
+
+    if "[script info]" in lowered_text or "\ndialogue:" in lowered_text or lowered_ctype.endswith("/x-ass"):
+        cues = ["WEBVTT", ""]
+        for line in text.splitlines():
+            if not line.startswith("Dialogue:"):
+                continue
+            payload = line.split(":", 1)[1].lstrip()
+            parts = payload.split(",", 9)
+            if len(parts) < 10:
+                continue
+            start = _ass_time_to_vtt(parts[1])
+            end = _ass_time_to_vtt(parts[2])
+            cue_text = _strip_ass_text_markup(parts[9])
+            if not cue_text:
+                continue
+            cues.extend([f"{start} --> {end}", cue_text, ""])
+        return ("\n".join(cues).strip() + "\n").encode("utf-8")
+
+    # Treat remaining text subtitles as SRT-like and normalize timestamps for VTT.
+    text = re.sub(r"(\d{2}:\d{2}:\d{2}),(\d{3})", r"\1.\2", text)
+    if not text.lstrip().startswith("WEBVTT"):
+        text = "WEBVTT\n\n" + text
+    return text.encode("utf-8")
 
 
 def ensure_plex_catalog_binding(force_refresh: bool = False):
@@ -205,6 +274,14 @@ def static_movies_min_js():
     )
 
 
+@app.route("/plex.svg")
+def static_plex_logo():
+    return send_file(
+        Path(__file__).with_name("plex.svg"),
+        mimetype="image/svg+xml",
+    )
+
+
 @app.route("/api/private/unlock", methods=["POST"])
 def api_private_unlock():
     data = request.get_json(silent=True) or {}
@@ -275,6 +352,18 @@ def build_video_response_item(item: dict) -> dict:
 
     if ON_DEMAND_TRANSCODE and suffix in SOURCE_EXTENSIONS:
         response_item["soft_stream_url"] = f"/video/{response_item['id']}?fmp4=1"
+
+    audio_codes = []
+    for codec in response_item.get("audio_codecs", []):
+        normalized = str(codec or "").strip().lower()
+        if normalized:
+            audio_codes.append(normalized)
+    response_item["audio_codecs"] = audio_codes
+    whitelist = cfg_runtime.get("direct_audio_whitelist", set()) or set()
+    direct_enabled = bool(cfg_runtime.get("direct_playback_enabled", True))
+    response_item["direct_play_safe"] = (
+        direct_enabled and bool(audio_codes) and whitelist.issuperset(audio_codes)
+    )
 
     return response_item
 
@@ -387,8 +476,23 @@ def api_status():
     return jsonify(status)
 
 
+@app.route("/api/config")
+def api_config():
+    whitelist = cfg_runtime.get("direct_audio_whitelist", set()) or set()
+    return jsonify(
+        {
+            "debug_enabled": bool(cfg_runtime.get("debug_enabled", False)),
+            "direct_playback_enabled": bool(
+                cfg_runtime.get("direct_playback_enabled", True)
+            ),
+            "direct_audio_whitelist": sorted(whitelist),
+        }
+    )
+
+
 @app.route("/rescan")
 def rescan():
+    force_full = parse_bool(request.args.get("full", "0"))
     with catalog._lock:
         if catalog.is_scanning:
             return jsonify({"ok": False, "reason": "scan_in_progress"}), 202
@@ -398,6 +502,8 @@ def rescan():
         try:
             if APP_INSTANCE:
                 APP_INSTANCE.reload_from_disk()
+            if force_full:
+                catalog.invalidate_scan_state()
             catalog.scan()
             rebuild_plex_overlay_into_catalog(persist_index=True)
         except Exception as exc:
@@ -407,9 +513,12 @@ def rescan():
             except Exception:
                 pass
             logging.warning("Background rescan failed: %s", exc)
-
+    logging.info(
+        "Start scanning directories... mode=%s",
+        "full" if force_full else "incremental",
+    )
     threading.Thread(target=reload_and_scan, daemon=True).start()
-    return jsonify({"ok": True, "started": True})
+    return jsonify({"ok": True, "started": True, "mode": "full" if force_full else "incremental"})
 
 
 @app.route("/thumbs/placeholder.jpg")
@@ -652,7 +761,8 @@ def plex_subtitle(vid):
     try:
         body = resp.read()
         ctype = resp.headers.get("Content-Type", "text/vtt")
-        return Response(body, mimetype=ctype)
+        normalized = normalize_subtitle_to_vtt(body, ctype)
+        return Response(normalized, mimetype="text/vtt")
     finally:
         resp.close()
 
@@ -745,9 +855,24 @@ def plex_hls_proxy():
     except Exception:
         return "Bad request", 400
 
+    upstream_headers = {}
+    for header_name in (
+        "Accept",
+        "Range",
+        "If-Range",
+        "User-Agent",
+        "Origin",
+        "Referer",
+    ):
+        value = request.headers.get(header_name)
+        if value:
+            upstream_headers[header_name] = value
+    if "Accept" not in upstream_headers:
+        upstream_headers["Accept"] = "*/*"
+
     try:
         upstream = (
-            plex_adapter.open_absolute(target, headers={"Accept": "*/*"})
+            plex_adapter.open_absolute(target, headers=upstream_headers)
             if plex_adapter
             else None
         )
@@ -757,6 +882,11 @@ def plex_hls_proxy():
         return "Not found", 404
 
     ctype = upstream.headers.get("Content-Type", "application/octet-stream")
+    upstream_status = int(
+        getattr(upstream, "status", None)
+        or getattr(upstream, "code", None)
+        or 200
+    )
     if "mpegurl" in ctype or target.endswith(".m3u8"):
         try:
             text = upstream.read().decode("utf-8", errors="ignore")
@@ -782,9 +912,23 @@ def plex_hls_proxy():
             )
         return Response(
             "\n".join(out_lines) + "\n",
+            status=upstream_status,
             mimetype="application/vnd.apple.mpegurl",
             headers={"Cache-Control": "no-store"},
         )
+
+    passthrough_headers = {"Cache-Control": "no-store"}
+    for header_name in (
+        "Content-Length",
+        "Content-Range",
+        "Accept-Ranges",
+        "Content-Disposition",
+        "ETag",
+        "Last-Modified",
+    ):
+        value = upstream.headers.get(header_name)
+        if value:
+            passthrough_headers[header_name] = value
 
     def generate():
         try:
@@ -801,8 +945,9 @@ def plex_hls_proxy():
 
     return Response(
         generate(),
+        status=upstream_status,
         mimetype=ctype,
-        headers={"Cache-Control": "no-store"},
+        headers=passthrough_headers,
         direct_passthrough=True,
     )
 
@@ -966,6 +1111,8 @@ class App:
         root_cfg = cfg.get("root", [])
         root_list = root_cfg if isinstance(root_cfg, list) else [root_cfg]
         roots = [Path(root).expanduser().resolve() for root in root_list if str(root).strip()]
+        plex_cfg = cfg.get("plex", {}) if isinstance(cfg.get("plex", {}), dict) else {}
+        plex_enabled = bool(cfg.get("enable_plex_server", False))
         catalog = Catalog(
             roots,
             Path(cfg["thumbs_dir"]).expanduser().resolve(),
@@ -977,6 +1124,7 @@ class App:
             private_passcode=cfg.get("private_passcode", ""),
             transcode_enabled=cfg.get("transcode", True),
             verify_passcode_fn=verify_passcode,
+            generate_thumbs=not plex_enabled,
         )
         self.host = cfg.get("host", "0.0.0.0")
         self.port = int(cfg.get("port", DEFAULT_PORT))
@@ -988,11 +1136,17 @@ class App:
             or "h264_videotoolbox"
         )
         cfg_runtime["on_demand_hls"] = bool(cfg.get("on_demand_hls", False))
+        direct_cfg = cfg.get("direct_playback", {}) if isinstance(cfg.get("direct_playback"), dict) else {}
+        cfg_runtime["direct_playback_enabled"] = bool(direct_cfg.get("enabled", True))
+        cfg_runtime["direct_audio_whitelist"] = {
+            str(codec).strip().lower()
+            for codec in (direct_cfg.get("audio_whitelist") or [])
+            if str(codec or "").strip()
+        }
+        cfg_runtime["debug_enabled"] = bool(cfg.get("debug_enabled", False))
         plex_adapter = PlexAdapter(
-            enabled=bool(cfg.get("enable_plex_server", False)),
-            plex_cfg=cfg.get("plex", {})
-            if isinstance(cfg.get("plex", {}), dict)
-            else {},
+            enabled=plex_enabled,
+            plex_cfg=plex_cfg,
         )
 
     def reload_from_disk(self):

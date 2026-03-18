@@ -37,6 +37,76 @@ function getBasePath() {
   return normalizeBasePath(window.location.pathname || "/");
 }
 const BASE_PATH = getBasePath();
+let manualPlaybackMode = null;
+let currentPlaybackMode = null;
+let plexButton = null;
+const PLAYBACK_OVERRIDE_PREFIX = "playback-override:";
+let skipManualOverrideLoad = false;
+
+function isPlexStreamUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw, window.location.href);
+    return /\/plex\//.test(parsed.pathname);
+  } catch (e) {
+    return /\/plex\//.test(raw) || raw.includes("plex_stream");
+  }
+}
+
+function getKnownPlexStreamUrl(video) {
+  const explicit = String(video?.plex_stream_url || "").trim();
+  if (explicit) return explicit;
+  const id = String(video?.id || "").trim();
+  if (!id) return "";
+  const thumb = String(video?.thumb_url || "").trim();
+  const subtitle = String(video?.subtitle_url || "").trim();
+  if (thumb.includes("/plex/") || subtitle.includes("/plex/")) {
+    return `/plex/video/${id}.m3u8`;
+  }
+  return "";
+}
+
+function updatePlexIndicator(mode) {
+  currentPlaybackMode = mode || null;
+  if (!plexButton) return;
+  const forcedPlex = manualPlaybackMode === "plex";
+  const forcedDirect = manualPlaybackMode === "direct";
+  const isActive = forcedPlex || (!forcedDirect && mode === "plex");
+  plexButton.classList.toggle("active", isActive);
+  plexButton.dataset.mode = manualPlaybackMode || "auto";
+  plexButton.setAttribute("aria-pressed", String(forcedPlex));
+  if (forcedPlex) {
+    plexButton.title = "Plex playback (forced)";
+  } else if (forcedDirect) {
+    plexButton.title = "Direct playback (forced)";
+  } else {
+    plexButton.title = mode === "plex"
+      ? "Plex playback (auto)"
+      : "Direct playback (auto)";
+  }
+}
+
+function cycleManualPlaybackMode() {
+  if (!manualPlaybackMode) {
+    manualPlaybackMode = currentPlaybackMode === "plex" ? "direct" : "plex";
+  } else {
+    manualPlaybackMode = manualPlaybackMode === "plex" ? "direct" : "plex";
+  }
+  skipManualOverrideLoad = true;
+  persistManualPlaybackOverride(currentVideoId, manualPlaybackMode).catch(() => {});
+  updateDebugPanel();
+  const video =
+    currentVideoRecord ||
+    (currentVideoId ? videos.find((v) => v.id === currentVideoId) : null);
+  if (video) {
+    currentVideoRecord = video;
+    const subtitle = video.subtitle_url ? withBase(video.subtitle_url) : null;
+    openPlayer(pickStreamCandidates(video), video.name, subtitle);
+    return;
+  }
+  updatePlexIndicator(currentPlaybackMode);
+}
 function withBase(path) {
   const raw = String(path || "").trim();
   if (!raw) return BASE_PATH || "/";
@@ -78,7 +148,8 @@ function isIPadClient() {
   );
   return shortSide >= 768;
 }
-function getPreferredPlaybackMode(v) {
+function getPreferredPlaybackMode(v, override = null) {
+  if (override === "plex" || override === "direct") return override;
   const name = String(v?.name || "").toLowerCase();
   const rel = String(v?.relative_path || "").toLowerCase();
   const path = rel || name;
@@ -86,28 +157,26 @@ function getPreferredPlaybackMode(v) {
   const directUrl = String(
     v?.desktop_stream_url || v?.stream_url || v?.video_url || "",
   );
-  if (!v?.plex_stream_url) return "direct";
-  if (
-    path.endsWith(".mp4") ||
-    path.endsWith(".m4v") ||
-    path.endsWith(".webm")
-  ) {
-    if (directUrl.includes("?fmp4=1") || directUrl.includes("/hls/"))
-      return "plex";
-    return "direct";
-  }
-  return v?.plex_stream_url ? "plex" : "direct";
+  const hasPlex = Boolean(getKnownPlexStreamUrl(v));
+  if (!hasPlex) return "direct";
+  if (directUrl.includes("?fmp4=1") || directUrl.includes("/hls/")) return "plex";
+  const safeExt =
+    path.endsWith(".mp4") || path.endsWith(".m4v") || path.endsWith(".webm");
+  const directSafe = Boolean(v?.direct_play_safe);
+  if (safeExt && directSafe) return "direct";
+  return "plex";
 }
 function pickStreamUrl(v) {
   if (!v) return "";
-  const mode = getPreferredPlaybackMode(v);
+  const mode = getPreferredPlaybackMode(v, manualPlaybackMode);
+  const plexUrl = getKnownPlexStreamUrl(v);
   const directUrl =
     (isDesktopClient() || isIOSLike()) && v.desktop_stream_url
       ? v.desktop_stream_url
       : v.stream_url || v.video_url;
-  if (mode === "plex" && v.plex_stream_url) return withBase(v.plex_stream_url);
+  if (mode === "plex" && plexUrl) return withBase(plexUrl);
   if (directUrl) return withBase(directUrl);
-  return withBase(v.plex_stream_url || "");
+  return withBase(plexUrl || "");
 }
 function pickStreamCandidates(v) {
   if (!v) return [];
@@ -120,7 +189,8 @@ function pickStreamCandidates(v) {
     out.push(withBase(s));
   };
 
-  const mode = getPreferredPlaybackMode(v);
+  const mode = getPreferredPlaybackMode(v, manualPlaybackMode);
+  const plexUrl = getKnownPlexStreamUrl(v);
   const name = String(v.name || "").toLowerCase();
   const rel = String(v.relative_path || "").toLowerCase();
   const isHeavyContainer =
@@ -133,18 +203,40 @@ function pickStreamCandidates(v) {
       ? v.desktop_stream_url
       : v.stream_url || v.video_url;
 
+  if (manualPlaybackMode === "plex") {
+    push(plexUrl);
+    return out;
+  }
+
+  if (manualPlaybackMode === "direct") {
+    push(directUrl);
+    return out;
+  }
+
   if (mode === "plex") {
-    push(v.plex_stream_url);
+    push(plexUrl);
     push(directUrl);
   } else {
     push(directUrl);
-    push(v.plex_stream_url);
+    push(plexUrl);
   }
 
   // For MKV/TS, keep soft transcode as last fallback.
   if (isHeavyContainer) push(v.soft_stream_url);
 
   return out;
+}
+function getCandidateFallbackDelay(url) {
+  const s = String(url || "");
+  if (!s) return 3200;
+  if (s.includes(".m3u8")) {
+    // Plex HLS can take a second or two to finish manifest/segment delivery on macOS
+    if (isIOSLike()) return 10000;
+    return 9000;
+  }
+  if (isDesktopClient()) return 5000;
+  if (isIOSLike()) return 5000;
+  return 3200;
 }
 function autoHideNativeControls() {
   if (!isIOSLike()) return;
@@ -186,6 +278,15 @@ let filteredVideos = [];
 let folderListCache = [];
 let catalogStatus = { available: true };
 let privateMode = localStorage.getItem("movies_private_mode") === "1";
+let serverConfig = { debug_enabled: false };
+let serverConfigPromise = null;
+let debugEnabled = false;
+const debugState = {
+  currentVideoId: null,
+  lastCandidate: "",
+  candidates: [],
+  defaultMode: null,
+};
 let privatePasscode = "";
 function setPrivateMode(v) {
   privateMode = !!v;
@@ -204,7 +305,7 @@ function getOrCreateDeviceId() {
 }
 const deviceId = getOrCreateDeviceId();
 let currentSubtitleObjectUrl = null;
-const CACHE_SCHEMA_VERSION = 3;
+const CACHE_SCHEMA_VERSION = 4;
 const CACHE_DB_NAME = "movies-cache";
 const CACHE_STORE_NAME = "snapshots";
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -212,6 +313,297 @@ const CACHE_MAX_RECORDS = 8;
 const CACHE_MAX_BYTES = 18 * 1024 * 1024;
 function deviceHeaders(extra = {}) {
   return { ...extra, "X-Device-Id": deviceId };
+}
+
+async function loadServerConfig() {
+  if (serverConfigPromise) return serverConfigPromise;
+  serverConfigPromise = (async () => {
+    try {
+      const res = await fetch(apiUrl("config"), {
+        headers: deviceHeaders(),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      serverConfig = data || {};
+      debugEnabled = !!serverConfig.debug_enabled;
+      updateDebugPanel();
+      return serverConfig;
+    } catch (err) {
+      return null;
+    }
+  })();
+  return serverConfigPromise;
+}
+
+let debugDragActive = false;
+const debugDragState = {
+  startX: 0,
+  startY: 0,
+  startLeft: 0,
+  startTop: 0,
+};
+let panelPosition = { left: null, top: null };
+const PANEL_PEEK_RATIO = 0.1;
+const PANEL_MIN_PEEK = 32;
+let debugHiddenSide = null;
+const supportsPointerEvents = typeof window.PointerEvent !== "undefined";
+const isTouchDevice = !!("ontouchstart" in window || navigator.maxTouchPoints > 0);
+const touchDragOptions = { passive: false };
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function setPanelPosition(left, top) {
+  if (!debugPanel) return;
+  const rect = debugPanel.getBoundingClientRect();
+  const maxLeft = window.innerWidth - rect.width * 0.05;
+  const minLeft = -rect.width * 0.95;
+  const clampedLeft = clamp(left, minLeft, maxLeft);
+  const clampedTop = clamp(top, 10, window.innerHeight - rect.height - 10);
+  panelPosition.left = clampedLeft;
+  panelPosition.top = clampedTop;
+  debugPanel.style.left = `${clampedLeft}px`;
+  debugPanel.style.top = `${clampedTop}px`;
+  debugPanel.style.right = "auto";
+  debugPanel.style.bottom = "auto";
+}
+
+function updateDebugCornerVisibility() {
+  if (!debugCorner) return;
+  const visible = !!debugHiddenSide;
+  debugCorner.classList.toggle("visible", visible);
+  debugCorner.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function ensureDebugPanelTouchMode() {
+  if (!debugPanel) return;
+  debugPanel.classList.toggle("touch-enabled", isTouchDevice);
+}
+
+function ensureDefaultPosition() {
+  if (!debugPanel) return;
+  if (panelPosition.left != null && panelPosition.top != null) return;
+  const computedStyle = window.getComputedStyle(debugPanel);
+  const wasHidden = computedStyle.display === "none";
+  const prevDisplay = debugPanel.style.display;
+  if (wasHidden) {
+    debugPanel.style.display = "block";
+  }
+  const rect = debugPanel.getBoundingClientRect();
+  const defaultLeft = window.innerWidth - rect.width - 16;
+  const defaultTop = window.innerHeight - rect.height - 16;
+  panelPosition.left = clamp(
+    defaultLeft,
+    10,
+    window.innerWidth - rect.width - 10,
+  );
+  panelPosition.top = clamp(
+    defaultTop,
+    10,
+    window.innerHeight - rect.height - 10,
+  );
+  if (wasHidden) {
+    debugPanel.style.display = prevDisplay || "";
+  }
+}
+
+function restorePanelPosition(forceDefault = false) {
+  if (!debugPanel) return;
+  const rect = debugPanel.getBoundingClientRect();
+  if (forceDefault) {
+    panelPosition.left = null;
+    panelPosition.top = null;
+  }
+  if (forceDefault) {
+    ensureDefaultPosition();
+  } else if (debugHiddenSide) {
+    const clampedTop = clamp(
+      panelPosition.top ?? rect.top,
+      10,
+      window.innerHeight - rect.height - 10,
+    );
+    panelPosition.top = clampedTop;
+    const defaultLeftRight = clamp(
+      window.innerWidth - rect.width - 16,
+      10,
+      window.innerWidth - rect.width - 10,
+    );
+    const defaultLeftLeft = clamp(16, 10, window.innerWidth - rect.width - 10);
+    panelPosition.left = debugHiddenSide === "left"
+      ? defaultLeftLeft
+      : defaultLeftRight;
+  } else if (panelPosition.left == null || panelPosition.top == null) {
+    ensureDefaultPosition();
+  }
+  debugHiddenSide = null;
+  debugPanel.dataset.hiddenSide = "";
+  setPanelPosition(panelPosition.left, panelPosition.top);
+  debugPanel.style.transform = "translate(0, 0)";
+  updateDebugCornerVisibility();
+}
+
+function peekHidePanel(side) {
+  if (!debugPanel) return;
+  const rect = debugPanel.getBoundingClientRect();
+  const peek = Math.max(PANEL_MIN_PEEK, rect.width * PANEL_PEEK_RATIO);
+  const top = clamp(rect.top, 10, window.innerHeight - rect.height - 10);
+  const left = side === "left" ? -rect.width + peek : window.innerWidth - peek;
+  setPanelPosition(left, top);
+  debugPanel.style.transform = "translate(0, 0)";
+  debugHiddenSide = side;
+  debugPanel.dataset.hiddenSide = side;
+  updateDebugCornerVisibility();
+}
+
+function snapPanelToEdge() {
+  if (!debugPanel) return;
+  const rect = debugPanel.getBoundingClientRect();
+  const fullWidth = rect.width;
+  const leftHidden = rect.left < -fullWidth * 0.3;
+  const rightHidden = rect.right > window.innerWidth + fullWidth * 0.3;
+  if (leftHidden) {
+    peekHidePanel("left");
+    return;
+  }
+  if (rightHidden) {
+    peekHidePanel("right");
+    return;
+  }
+  restorePanelPosition();
+}
+
+function showDebugPanel() {
+  if (!debugPanel || !debugEnabled) return;
+  ensureDebugPanelTouchMode();
+  debugPanel.style.display = "block";
+  restorePanelPosition(true);
+  debugPanel.classList.add("visible");
+  updateDebugCornerVisibility();
+}
+
+function hideDebugPanel() {
+  if (!debugPanel) return;
+  debugPanel.style.display = "none";
+  debugPanel.classList.remove("visible");
+  debugHiddenSide = null;
+  if (debugPanel) debugPanel.dataset.hiddenSide = "";
+  updateDebugCornerVisibility();
+}
+
+function getPointerPoint(e) {
+  if (!e) return null;
+  if (e.touches && e.touches[0]) return e.touches[0];
+  if (e.changedTouches && e.changedTouches[0]) return e.changedTouches[0];
+  return e;
+}
+
+function handleDebugDragStart(e) {
+  if (!debugEnabled) return;
+  const point = getPointerPoint(e);
+  if (!point || !debugPanel) return;
+  if (debugHiddenSide) {
+    restorePanelPosition();
+    debugHiddenSide = null;
+    e.preventDefault();
+    return;
+  }
+  debugDragActive = true;
+  debugPanel.classList.add("dragging");
+  const rect = debugPanel.getBoundingClientRect();
+  debugDragState.startX = point.clientX;
+  debugDragState.startY = point.clientY;
+  debugDragState.startLeft = rect.left;
+  debugDragState.startTop = rect.top;
+  attachDragListeners();
+  e.preventDefault();
+}
+
+function handleDebugDragMove(e) {
+  if (!debugDragActive) return;
+  const point = getPointerPoint(e);
+  if (!point) return;
+  const dx = point.clientX - debugDragState.startX;
+  const dy = point.clientY - debugDragState.startY;
+  setPanelPosition(
+    debugDragState.startLeft + dx,
+    debugDragState.startTop + dy,
+  );
+  e.preventDefault();
+}
+
+function handleDebugDragEnd() {
+  if (!debugDragActive) return;
+  debugDragActive = false;
+  if (debugPanel) debugPanel.classList.remove("dragging");
+  detachDragListeners();
+  snapPanelToEdge();
+}
+
+let dragListenersAttached = false;
+function attachDragListeners() {
+  if (dragListenersAttached) return;
+  dragListenersAttached = true;
+  if (supportsPointerEvents) {
+    window.addEventListener("pointermove", handleDebugDragMove);
+    window.addEventListener("pointerup", handleDebugDragEnd);
+    window.addEventListener("pointercancel", handleDebugDragEnd);
+  } else {
+    window.addEventListener("mousemove", handleDebugDragMove);
+    window.addEventListener("mouseup", handleDebugDragEnd);
+    window.addEventListener(
+      "touchmove",
+      handleDebugDragMove,
+      touchDragOptions,
+    );
+    window.addEventListener("touchend", handleDebugDragEnd);
+    window.addEventListener("touchcancel", handleDebugDragEnd);
+  }
+}
+
+function detachDragListeners() {
+  if (!dragListenersAttached) return;
+  if (supportsPointerEvents) {
+    window.removeEventListener("pointermove", handleDebugDragMove);
+    window.removeEventListener("pointerup", handleDebugDragEnd);
+    window.removeEventListener("pointercancel", handleDebugDragEnd);
+  } else {
+    window.removeEventListener("mousemove", handleDebugDragMove);
+    window.removeEventListener("mouseup", handleDebugDragEnd);
+    window.removeEventListener(
+      "touchmove",
+      handleDebugDragMove,
+      touchDragOptions,
+    );
+    window.removeEventListener("touchend", handleDebugDragEnd);
+    window.removeEventListener("touchcancel", handleDebugDragEnd);
+  }
+  dragListenersAttached = false;
+}
+
+function updateDebugPanel() {
+  if (!debugPanel || !debugOutput) return;
+  if (!debugEnabled) {
+    hideDebugPanel();
+    return;
+  }
+  const scan = catalogStatus?.scan_progress || {};
+  const lines = [
+    `default: ${debugState.defaultMode || "unknown"}`,
+    `playback: ${currentPlaybackMode || "idle"}`,
+    `whitelist: ${
+      Array.isArray(serverConfig?.direct_audio_whitelist)
+        ? serverConfig.direct_audio_whitelist.join(", ") || "none"
+        : "none"
+    }`,
+    `video: ${debugState.currentVideoId || "idle"}`,
+    `candidate: ${debugState.lastCandidate || "n/a"}`,
+    `scan: ${scan.phase || "idle"} entries:${
+      scan.processed_entries ?? 0
+    } videos:${scan.videos_found ?? 0}`,
+  ];
+  debugOutput.innerHTML = lines.map((line) => escapeHtml(line)).join("<br />");
+  showDebugPanel();
 }
 function openCacheDb() {
   return new Promise((resolve, reject) => {
@@ -287,6 +679,23 @@ async function cacheClearAll() {
     tx.objectStore(CACHE_STORE_NAME).clear();
   }).finally(() => db.close());
 }
+function playbackOverrideKey(videoId) {
+  return `${PLAYBACK_OVERRIDE_PREFIX}${videoId}`;
+}
+async function loadManualPlaybackOverride(videoId) {
+  if (!videoId) return null;
+  const stored = await cacheGetRaw(playbackOverrideKey(videoId));
+  return stored === "plex" || stored === "direct" ? stored : null;
+}
+async function persistManualPlaybackOverride(videoId, mode) {
+  if (!videoId) return;
+  const key = playbackOverrideKey(videoId);
+  if (!mode) {
+    await cacheDeleteRaw(key);
+    return;
+  }
+  await cacheSetRaw(key, mode);
+}
 function estimateCacheBytes(payload) {
   try {
     return new Blob([JSON.stringify(payload)]).size;
@@ -332,6 +741,10 @@ function normalizeVideoRecord(v) {
   ]) {
     if (out[key]) out[key] = stripDeviceIdFromUrl(out[key]);
   }
+  if (!out.plex_stream_url) {
+    const derivedPlexUrl = getKnownPlexStreamUrl(out);
+    if (derivedPlexUrl) out.plex_stream_url = derivedPlexUrl;
+  }
   if (Array.isArray(out.preview_urls))
     out.preview_urls = out.preview_urls.map(stripDeviceIdFromUrl);
   return out;
@@ -342,6 +755,9 @@ async function pruneSnapshotCache() {
   let totalBytes = 0;
   const keep = [];
   for (const rec of records) {
+    const isOverride = String(rec.key || "").startsWith(PLAYBACK_OVERRIDE_PREFIX);
+    if (isOverride) continue;
+
     const value = rec.value || {};
     const savedAt = Number(value.savedAt || 0);
     const expired = !savedAt || now - savedAt > CACHE_MAX_AGE_MS;
@@ -512,7 +928,10 @@ const grid = document.getElementById("grid"),
   stat = document.getElementById("stat"),
   notice = document.getElementById("notice"),
   tt = document.getElementById("tt"),
-  scrollSentinel = document.getElementById("scrollSentinel");
+  scrollSentinel = document.getElementById("scrollSentinel"),
+  debugPanel = document.getElementById("debugPanel"),
+  debugOutput = document.getElementById("debugOutput");
+const debugCorner = document.getElementById("debugCorner");
 const toTopBtn = document.getElementById("toTopBtn");
 const preloadOverlay = document.getElementById("preloadOverlay");
 const modal = document.getElementById("modal"),
@@ -523,6 +942,36 @@ const modal = document.getElementById("modal"),
   mss = document.getElementById("mss"),
   msub = document.getElementById("msub"),
   vloader = document.getElementById("vloader");
+plexButton = document.getElementById("mplex");
+if (plexButton) {
+  plexButton.addEventListener("click", cycleManualPlaybackMode);
+}
+if (debugPanel) {
+  if (supportsPointerEvents) {
+    debugPanel.addEventListener("pointerdown", handleDebugDragStart);
+  } else {
+    debugPanel.addEventListener("mousedown", handleDebugDragStart);
+    debugPanel.addEventListener("touchstart", handleDebugDragStart, {
+      passive: false,
+    });
+  }
+  debugPanel.addEventListener("click", (event) => {
+    if (debugHiddenSide) {
+      restorePanelPosition();
+      event.stopPropagation();
+    }
+  });
+  ensureDebugPanelTouchMode();
+}
+
+if (debugCorner) {
+  debugCorner.addEventListener("click", (event) => {
+    restorePanelPosition();
+    event.preventDefault();
+    event.stopPropagation();
+  });
+}
+updateDebugCornerVisibility();
 const pmodal = document.getElementById("pmodal"),
   ppass = document.getElementById("ppass"),
   pcancel = document.getElementById("pcancel"),
@@ -532,9 +981,11 @@ const emodal = document.getElementById("emodal"),
   eok = document.getElementById("eok");
 let currentSubtitleUrl = null;
 let subtitleEnabled = false;
+let currentSubtitleTrack = null;
 let hlsPlayer = null;
 let slideshowEnabled = false;
 let currentVideoId = null;
+let currentVideoRecord = null;
 let hlsLoadingPromise = null;
 let backgroundPageLoading = false;
 const ENABLE_PREVIEW_FRAMES = true;
@@ -591,11 +1042,31 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     ? urlOrCandidates.filter(Boolean)
     : [urlOrCandidates].filter(Boolean);
   let activeUrl = candidates[0] || "";
-  const videoId =
-    (String(activeUrl || "").match(/\/(?:video|hls|plex\/video)\/([^/?#]+)/) ||
-      [])[1] || null;
+  const rawVideoId =
+    (String(activeUrl || "").match(
+      /\/(?:video|hls|plex\/video)\/([^/?#]+)/,
+    ) || [])[1] || null;
+  const videoId = rawVideoId
+    ? String(rawVideoId).replace(/\.m3u8$/i, "")
+    : null;
+  if (!skipManualOverrideLoad && videoId) {
+    manualPlaybackMode = await loadManualPlaybackOverride(videoId);
+  } else if (!videoId) {
+    manualPlaybackMode = null;
+  }
+  skipManualOverrideLoad = false;
   currentVideoId = videoId || null;
-  const fallback = videoId ? videos.find((v) => v.id === videoId) : null;
+  currentVideoRecord =
+    currentVideoId && videos.length
+      ? videos.find((v) => v.id === currentVideoId) || currentVideoRecord
+      : currentVideoRecord;
+  debugState.currentVideoId = videoId;
+  debugState.candidates = candidates;
+  debugState.defaultMode = currentVideoRecord
+    ? getPreferredPlaybackMode(currentVideoRecord)
+    : null;
+  updateDebugPanel();
+  const fallback = currentVideoRecord || null;
   const fallbackVideoUrl =
     fallback && fallback.video_url
       ? withBase(stripDeviceIdFromUrl(fallback.video_url))
@@ -629,7 +1100,8 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
       return;
     }
     if (String(url || "").includes(".m3u8")) {
-      if (mvideo.canPlayType("application/vnd.apple.mpegurl")) {
+      const useNative = isIOSLike() && mvideo.canPlayType("application/vnd.apple.mpegurl");
+      if (useNative) {
         mvideo.src = url || "";
       } else {
         const hasHls =
@@ -688,11 +1160,16 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
   mvideo.querySelectorAll("track").forEach((t) => t.remove());
   cleanupSubtitleObjectUrl();
   currentSubtitleUrl = resolvedSubtitle;
+  currentSubtitleTrack = null;
   subtitleEnabled = false;
   // Hide action buttons during loading
   msub.style.display = "none";
   mclose.style.display = "none";
-  if (resolvedSubtitle) {
+  const attachSubtitleTrack = async () => {
+    if (!resolvedSubtitle) {
+      msub.style.display = "none";
+      return;
+    }
     try {
       const trackSrc = await resolveSubtitleTrackSrc(resolvedSubtitle);
       const track = document.createElement("track");
@@ -702,15 +1179,23 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
       track.src = trackSrc;
       track.default = true;
       mvideo.appendChild(track);
+      currentSubtitleTrack = track;
       msub.textContent = "CC: On";
       subtitleEnabled = true;
+      const applyMode = () => {
+        setSubtitleMode(subtitleEnabled);
+      };
+      track.addEventListener("load", applyMode, { once: true });
+      if (revealed) {
+        msub.style.display = "inline-flex";
+        applyMode();
+      }
     } catch (e) {
       currentSubtitleUrl = null;
+      currentSubtitleTrack = null;
       msub.style.display = "none";
     }
-  } else {
-    msub.style.display = "none";
-  }
+  };
   // Loading state: compact loader card
   const portrait = window.matchMedia("(orientation: portrait)").matches;
   mbox.style.width =
@@ -723,6 +1208,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
   let revealTimer = null;
   let candidateAttemptId = 0;
   let candidateFallbackTimer = null;
+  let subtitleAttachStarted = false;
   const clearCandidateFallbackTimer = () => {
     if (!candidateFallbackTimer) return;
     clearTimeout(candidateFallbackTimer);
@@ -770,6 +1256,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     revealPlayer();
     relayoutModalBox();
     autoHideNativeControls();
+    clearCandidateFallbackTimer();
   };
   mvideo.onresize = () => {
     relayoutModalBox();
@@ -779,14 +1266,40 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     const attemptId = ++candidateAttemptId;
     const next = candidates[candidateIdx++] || fallbackVideoUrl || "";
     activeUrl = next;
+    const actualMode = next
+      ? isPlexStreamUrl(next)
+        ? "plex"
+        : "direct"
+      : null;
+    updatePlexIndicator(actualMode);
+    debugState.lastCandidate = activeUrl;
+    updateDebugPanel();
     clearCandidateFallbackTimer();
     await startPlayback(next);
-    candidateFallbackTimer = setTimeout(() => {
-      if (attemptId !== candidateAttemptId || revealed) return;
-      advanceCandidate();
-    }, 3200);
-    mvideo.play().catch(() => {
+    if (!subtitleAttachStarted) {
+      subtitleAttachStarted = true;
+      attachSubtitleTrack();
+    }
+    if (!next.includes(".m3u8")) {
+      candidateFallbackTimer = setTimeout(() => {
+        if (attemptId !== candidateAttemptId || revealed) return;
+        advanceCandidate();
+      }, getCandidateFallbackDelay(next));
+    } else {
+      candidateFallbackTimer = null;
+    }
+    mvideo.play().catch((err) => {
       if (attemptId !== candidateAttemptId) return;
+      // iOS/iPadOS can reject autoplay-style play() after async work even though
+      // the source is valid; do not treat that as a fatal playback candidate error.
+      if (
+        isIOSLike() &&
+        err &&
+        (err.name === "NotAllowedError" || err.name === "AbortError")
+      ) {
+        revealPlayer();
+        return;
+      }
       advanceCandidate();
     });
   };
@@ -836,6 +1349,7 @@ function closePlayer() {
     hlsPlayer = null;
   }
   cleanupSubtitleObjectUrl();
+  currentSubtitleTrack = null;
   hidePreloadOverlay();
   mvideo.removeAttribute("src");
   mvideo.load();
@@ -848,6 +1362,14 @@ function closePlayer() {
   }
   mbox.style.width = "";
   modal.classList.remove("on");
+  currentVideoId = null;
+  currentVideoRecord = null;
+  updatePlexIndicator(null);
+  debugState.currentVideoId = null;
+  debugState.lastCandidate = "";
+  debugState.candidates = [];
+  debugState.defaultMode = null;
+  updateDebugPanel();
 }
 function playNextInSlideshow() {
   if (!slideshowEnabled || !currentVideoId) return;
@@ -859,13 +1381,22 @@ function playNextInSlideshow() {
     mss.textContent = "Slideshow: Off";
     return;
   }
+  currentVideoRecord = next;
   const sub = next && next.subtitle_url ? withBase(next.subtitle_url) : null;
   openPlayer(pickStreamCandidates(next), next.name, sub);
 }
 function setSubtitleMode(on) {
+  const desiredMode = on ? "showing" : "disabled";
+  if (currentSubtitleTrack && currentSubtitleTrack.track) {
+    try {
+      currentSubtitleTrack.track.mode = desiredMode;
+    } catch (e) {}
+  }
   const tracks = mvideo.textTracks || [];
   for (let i = 0; i < tracks.length; i++) {
-    tracks[i].mode = on ? "showing" : "hidden";
+    try {
+      tracks[i].mode = desiredMode;
+    } catch (e) {}
   }
 }
 function toggleSubtitle() {
@@ -1005,6 +1536,7 @@ function bindCardEvents(scope) {
       if (card) {
         const v = videos.find((x) => x.id === card.dataset.id);
         const sub = v && v.subtitle_url ? withBase(v.subtitle_url) : null;
+        currentVideoRecord = v || null;
         openPlayer(pickStreamCandidates(v), card.dataset.name, sub);
       }
     });
@@ -1110,6 +1642,7 @@ function bindCardEvents(scope) {
           c.dataset.lastTap = "0";
           c.dataset.previewActive = "0";
           stopPreview();
+          currentVideoRecord = v || null;
           openPlayer(pickStreamCandidates(v), c.dataset.name, sub);
           return;
         }
@@ -1130,6 +1663,7 @@ function bindCardEvents(scope) {
         if (c) {
           const v = videos.find((x) => x.id === c.dataset.id);
           const sub = v && v.subtitle_url ? withBase(v.subtitle_url) : null;
+          currentVideoRecord = v || null;
           openPlayer(pickStreamCandidates(v), c.dataset.name, sub);
         }
       });
@@ -1557,6 +2091,7 @@ async function load(forceNetwork = false) {
     activeLoadId += 1;
     const loadId = activeLoadId;
     const headers = deviceHeaders();
+    await loadServerConfig();
 
     // Apply persisted folder filter immediately so first page query is consistent after refresh.
     const savedFolder = getSavedFolderSelection();
@@ -1575,6 +2110,7 @@ async function load(forceNetwork = false) {
     }
     const sr = await fetch(apiUrl("status"), { headers });
     catalogStatus = await sr.json();
+    updateDebugPanel();
     if (catalogStatus && catalogStatus.private_authorized) setPrivateMode(true);
     updatePrivateToggle();
 

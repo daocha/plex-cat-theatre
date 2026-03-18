@@ -17,6 +17,11 @@
   "on_demand_hls": true,
   "transcode_video_codec": "h264_videotoolbox",
   "enable_plex_server": true,
+  "debug_enabled": false,
+  "direct_playback": {
+    "enabled": true,
+    "audio_whitelist": ["aac", "mp3"]
+  },
   "auto_scan_on_start": false,
   "plex": {
     "base_url": "http://127.0.0.1:32400",
