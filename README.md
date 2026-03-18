@@ -1,25 +1,39 @@
-# Cat Theatre Movies Server
+# Cat Theatre Movies Server 🎬
 
 A self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`, with optional Plex integration for compatibility-focused playback.
 
+The project is intentionally lightweight:
+
+- small Python dependency surface
+- no database requirement
+- file-system-first cataloging
+- portable polling-based scan flow instead of OS-specific watcher dependence
+- optional Plex integration layered on top rather than required for core playback
+
 It is designed for:
 
-- local media libraries spread across one or more folders
-- thumbnail and preview generation
-- private-folder access control by device
-- reverse-proxy deployment under a path prefix such as `/movie/`
-- mixed playback strategies: direct file playback, built-in local transcoding, or Plex-backed HLS
+- 📂 local media libraries spread across one or more folders
+- 🖼️ thumbnail and preview generation
+- 🔐 private-folder access control by device
+- 🌐 reverse-proxy deployment under a path prefix such as `/movie/`
+- 🎧 mixed playback strategies: direct file playback, built-in local transcoding, or Plex-backed HLS
 
 ## Features
 
-- Multi-root media scanning
-- Poster thumbnails and preview frame generation
-- Private folders with device-based unlock
-- Native direct playback for browser-safe formats
-- Built-in local transcoding for `.mkv` and `.ts` when enabled
-- Optional Plex-backed playback and subtitle sourcing
-- Context-path-aware routing for reverse proxies
-- Aggressive browser image caching and IndexedDB metadata caching
+- 🔍 Multi-root media scanning
+- 🎞️ Poster thumbnails and preview frame generation
+- 🗝️ Private folders with device-based unlock
+- ✅ Native direct playback for browser-safe formats (AAC/MP3 whitelist)
+- 🧊 Built-in local transcoding for `.mkv` and `.ts` when enabled
+- 💎 Deep Plex Server integration for playback, posters, subtitles, and HLS proxying
+- 🔁 Context-path-aware routing for reverse proxies
+- 🗄️ Aggressive browser image caching plus IndexedDB metadata cache with configurable TTL
+
+### UX & Playback Notes ✨
+
+- The built-in debug panel lives in the bottom-right, stays fully visible on load, and slides to the nearest edge when you drag it far enough (~30% hidden). Tap the exposed edge to slide it back in without changing its vertical position, and a small dot reminds you the panel is off-screen.
+- Video playback automatically chooses the safer path: direct play for supported browsers, Plex HLS for heavy containers, and manual toggles are stored per-video in IndexedDB with no TTL.
+- Cached thumbnails and metadata respect your browser storage limits while keeping frequently-used results fresh.
 
 ## Project Structure
 
@@ -106,6 +120,8 @@ Important fields:
 - `enable_plex_server`: enable Plex integration
 - `plex.base_url`: Plex server base URL
 - `plex.token`: Plex token
+- `debug_enabled`: show the built-in debug overlay (bottom-right) that reports scan status and candidate selection
+- `direct_playback`: object with `enabled` (default `true`) and `audio_whitelist` (default `["aac","mp3"]`); direct playback is allowed only when a file's audio codecs are a subset of this whitelist
 
 ### Minimal Local-Only Example
 
@@ -148,6 +164,13 @@ Use this mode when you want Plex-backed playback for compatibility-sensitive for
   "auto_scan_on_start": true
 }
 ```
+
+Plex scan behavior:
+
+- local poster thumbnail generation is skipped to avoid unnecessary `ffmpeg` work
+- existing cached local thumbnails can still be reused if they already exist
+- preview-frame generation remains enabled, because Plex posters do not replace hover or tap previews
+- Plex integration stays optional; the server still works in local-only mode without Plex
 
 ### How to Get a Plex Token
 
@@ -206,6 +229,7 @@ Best for:
 
 - MP4/H.264-style files
 - devices and browsers known to support the file directly
+- audio codecs that match the `direct_playback.audio_whitelist` (default `["aac","mp3"]`); mismatched codecs such as DTS will fall through to the Plex-backed path for compatibility
 
 ### 2. Built-In Local Transcoding Without Plex
 
@@ -235,6 +259,12 @@ When Plex integration is enabled:
 - Plex generates the upstream HLS playlist
 - this server rewrites the playlist and proxies nested playlist and segment requests through `/plex/hls/proxy`
 - the browser still talks to this app, not directly to the Plex server
+- periodic scans skip generating new local poster thumbnails, which reduces background scan cost
+
+This keeps Plex integration strong without making Plex mandatory for the rest of the application:
+
+- the gallery, scanning, auth, and direct/local playback stack still remain lightweight and self-contained
+- Plex is used where it adds the most value: hard containers, subtitle selection, and compatibility-focused playback
 
 Best for:
 
@@ -245,14 +275,31 @@ Best for:
 
 Current frontend behavior:
 
-- direct playback is preferred for `.mp4`, `.m4v`, and `.webm` when the direct URL is truly a local direct-play path
-- Plex is preferred for `.mkv` and `.ts` when Plex is available
-- if a direct candidate fails to start quickly, playback falls back to the next available candidate
+- direct playback only wins for `.mp4`, `.m4v`, and `.webm` files whose audio codecs are in the configured `direct_playback.audio_whitelist` (default `["aac","mp3"]`); unsupported codecs such as DTS automatically route through Plex
+- Plex stays preferred for `.mkv`/`.ts`, for direct links that are actually fMP4/HLS, or whenever the direct audio whitelist rejects the codec
+- the fallback timer is tuned to be longer on native iOS HLS so the Plex stream has more time to warm up before the player switches candidates
 
 This means:
 
 - without Plex, the app still supports direct play and built-in local transcoding
 - with Plex, harder containers can be routed through Plex while easy formats stay direct where appropriate
+
+## Debug Overlay
+
+Enable `debug_enabled` in `movies_config.json` to keep a permanent debug overlay in the lower-right corner of the viewer. The panel reports:
+
+- whether the server is favoring direct playback or Plex
+- the configured `direct_playback.audio_whitelist`
+- the current playback candidate and video ID
+- recent scan progress metrics (phase, processed entries, videos seen)
+
+You can inspect the active config values with:
+
+```bash
+curl -s http://localhost:9245/api/config | python3 -m json.tool
+```
+
+If you serve the app under `/movie/`, use `http://localhost:9245/movie/api/config`. This JSON mirrors the same fields and shows whether `debug_enabled` is on.
 
 ## Authentication Model
 
@@ -340,6 +387,94 @@ Gallery metadata snapshots are cached in IndexedDB with bounded storage:
 - eviction of older entries when limits are exceeded
 
 This improves page bootstrap time, but image HTTP caching is the larger contributor to perceived gallery responsiveness.
+
+## Scan Behavior
+
+The catalog scan is designed to be incremental in cost even though it still walks each configured root.
+
+Current behavior:
+
+- unchanged files reuse cached `mtime + size` signatures so aspect probing and subtitle resolution are skipped
+- periodic scans no longer sort the full path list before processing, which reduces needless traversal overhead
+- deleted files are removed from the in-memory catalog and from the persisted catalog index
+- deleted files also trigger cleanup of generated thumbnail and preview-cache artifacts
+- index saves reuse cached file signature data instead of statting every file again during persistence
+
+What the scan still does:
+
+- it still walks the configured media roots to detect added, changed, and deleted files
+- it still queues preview generation when preview images are missing
+
+What it does not do:
+
+- it does not checksum large media files during periodic scans
+- it does not regenerate thumbnails, previews, or metadata for unchanged files unless their cached artifacts are missing
+
+### Force Full Rescan
+
+Normal rescans are incremental. If you want to force a true full rebuild of scan-derived state, use:
+
+```text
+/rescan?full=1
+```
+
+This is useful if:
+
+- someone manually deleted the thumbnail or preview cache folder
+- you suspect the saved scan manifest is stale
+- you want to invalidate the saved scan caches and rebuild derived scan state from scratch
+
+What `full=1` does:
+
+- clears the saved scan signature and readiness caches in memory
+- forces the next scan to treat files as needing full validation
+- keeps the resumable checkpoint and persisted catalog behavior intact during the scan
+
+Practical note:
+
+- if the cache folder is deleted, a normal incremental rescan will usually regenerate missing derived assets anyway
+- `full=1` is the explicit recovery mode when you want deterministic full revalidation
+
+### Check Scan Status
+
+To inspect current server and scan state in a readable way:
+
+```bash
+curl -s http://localhost:9245/api/status | python3 -m json.tool
+```
+
+If you serve the app under a context path such as `/movie/`, use:
+
+```bash
+curl -s http://localhost:9245/movie/api/status | python3 -m json.tool
+```
+
+This shows:
+
+- whether the catalog is currently scanning
+- the current `scan_progress` payload
+- video counts
+- private-mode and Plex status
+
+### Trigger Rescan
+
+Normal incremental rescan:
+
+```bash
+curl -s http://localhost:9245/rescan | python3 -m json.tool
+```
+
+Forced full rescan:
+
+```bash
+curl -s "http://localhost:9245/rescan?full=1" | python3 -m json.tool
+```
+
+If you use a context path such as `/movie/`, prepend it to the endpoint:
+
+```bash
+curl -s "http://localhost:9245/movie/rescan?full=1" | python3 -m json.tool
+```
 
 ## Frontend Development Notes
 

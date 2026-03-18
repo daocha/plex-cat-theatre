@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
@@ -7,7 +7,7 @@
       content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
     />
     <title>Miranda Cat Theatre</title>
-    <link rel="stylesheet" href="movies.css?v=20260317-1948" />
+    <link rel="stylesheet" href="movies.css?v=20260318-1202" />
   </head>
   <body>
     <main>
@@ -72,6 +72,17 @@
       <div id="grid" class="grid"></div>
       <div id="scrollSentinel" style="height: 1px; width: 100%"></div>
     </main>
+    <div id="debugPanel" class="debug-panel">
+      <div class="debug-header">Debug</div>
+      <pre id="debugOutput">Waiting for config...</pre>
+    </div>
+    <button
+      id="debugCorner"
+      class="debug-corner"
+      type="button"
+      aria-label="Show debug panel"
+      aria-hidden="true"
+    ></button>
     <button id="toTopBtn" type="button" aria-label="Back to top" title="Top">
       Top
     </button>
@@ -90,6 +101,22 @@
             <button id="mss" type="button">Slideshow: Off</button>
             <button id="msub" type="button" style="display: none">
               CC: On
+            </button>
+            <button
+              id="mplex"
+              class="plex-btn"
+              type="button"
+              aria-pressed="false"
+              title="Toggle Plex/direct playback"
+            >
+              <img
+                class="plex-icon"
+                src="plex.svg"
+                alt=""
+                role="presentation"
+                aria-hidden="true"
+              />
+              <span class="sr-only">Plex playback</span>
             </button>
             <button id="mclose" class="close" type="button">Close</button>
           </div>
@@ -138,6 +165,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-    <script src="movies.min.js?v=20260317-2346"></script>
+    <script src="movies.min.js?v=20260318-1710"></script>
   </body>
 </html>
