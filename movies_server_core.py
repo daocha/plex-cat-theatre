@@ -107,13 +107,14 @@ class StripPrefixMiddleware:
         "api",
         "plex",
         "video",
-        "hls",
-        "thumbs",
-        "subtitle",
-        "rescan",
-        "movies.css",
-        "movies.js",
-        "movies.min.js",
+    "hls",
+    "thumbs",
+    "subtitle",
+    "rescan",
+    "movies.css",
+    "movies.js",
+    "movies.min.js",
+    "plex.svg",
     }
 
     def __init__(self, wsgi_app):
@@ -310,6 +311,14 @@ def load_config(path: Path) -> Dict:
     cfg.setdefault("transcode_video_codec", "h264_videotoolbox")
     cfg.setdefault("enable_plex_server", False)
     cfg.setdefault("auto_scan_on_start", True)
+    cfg.setdefault("debug_enabled", False)
+    cfg.setdefault(
+        "direct_playback",
+        {
+            "enabled": True,
+            "audio_whitelist": ["aac", "mp3"],
+        },
+    )
     cfg.setdefault(
         "plex",
         {
