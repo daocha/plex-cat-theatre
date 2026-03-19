@@ -47,6 +47,7 @@ class PlexAdapter:
             "last_refresh": self._last_refresh,
             "last_error": self._last_error,
             "item_count": len(self._items_by_file),
+            "refreshing": self._refreshing,
         }
 
     def maybe_refresh(self):
