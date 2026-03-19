@@ -167,7 +167,14 @@ function readPersistedMobileZoomLevel() {
 }
 
 const PINCH_TRIGGER_DISTANCE = 24;
-let pinchTracking = { active: false, baseDist: 0 };
+let pinchTracking = {
+  active: false,
+  baseDist: 0,
+  lastDist: 0,
+  lastTs: 0,
+  startTs: 0,
+  pendingLevel: null,
+};
 
 function getTouchDistance(touches) {
   if (!touches || touches.length < 2) return 0;
@@ -177,29 +184,64 @@ function getTouchDistance(touches) {
   return Math.hypot(dx, dy);
 }
 
+function resetPinchTracking() {
+  pinchTracking.lastDist = 0;
+  pinchTracking.lastTs = 0;
+  pinchTracking.startTs = 0;
+  pinchTracking.pendingLevel = null;
+}
+
+function updatePinchTracking(distance, timestamp) {
+  pinchTracking.lastDist = distance;
+  pinchTracking.lastTs = timestamp;
+}
+
+function getPinchAnimationDuration(endTs) {
+  const elapsed = Math.max(16, endTs - (pinchTracking.startTs || endTs));
+  const traveled = Math.abs(
+    (pinchTracking.lastDist || pinchTracking.baseDist) - pinchTracking.baseDist,
+  );
+  const speed = traveled / elapsed;
+  return Math.max(150, Math.min(460, 360 - speed * 260));
+}
+
 function handlePinchStart(event) {
   if (!isMobileLayout() || event.touches.length !== 2) {
     pinchTracking.active = false;
     return;
   }
+  resetPinchTracking();
   pinchTracking.active = true;
-  pinchTracking.baseDist = getTouchDistance(event.touches);
+  const startDistance = getTouchDistance(event.touches);
+  const startTs = performance.now();
+  pinchTracking.baseDist = startDistance;
+  updatePinchTracking(startDistance, startTs);
+  pinchTracking.startTs = startTs;
+  pinchTracking.pendingLevel = mobileZoomLevel;
 }
 
 function handlePinchMove(event) {
   if (!pinchTracking.active || event.touches.length !== 2) return;
   const dist = getTouchDistance(event.touches);
   const delta = dist - pinchTracking.baseDist;
-  if (Math.abs(delta) < PINCH_TRIGGER_DISTANCE) return;
-  const targetLevel = delta > 0 ? 2 : 1;
-  setMobileZoomLevel(targetLevel);
-  pinchTracking.baseDist = dist;
+  if (Math.abs(delta) >= PINCH_TRIGGER_DISTANCE) {
+    pinchTracking.pendingLevel = delta > 0 ? 2 : 1;
+  }
+  updatePinchTracking(dist, performance.now());
   event.preventDefault();
 }
 
 function handlePinchEnd(event) {
   if (event.touches.length < 2) {
+    const targetLevel = pinchTracking.pendingLevel;
+    const endTs = performance.now();
     pinchTracking.active = false;
+    if (targetLevel && targetLevel !== mobileZoomLevel) {
+      setMobileZoomLevel(targetLevel, {
+        durationMs: getPinchAnimationDuration(endTs),
+      });
+    }
+    resetPinchTracking();
   }
 }
 
@@ -219,22 +261,127 @@ function persistMobileZoomLevel(level) {
   }
 }
 
-function setMobileZoomLevel(level) {
+function setMobileZoomLevel(level, { durationMs = null } = {}) {
   const mobile = isMobileLayout();
   if (!mobile) return;
   const next = level === 2 ? 2 : 1;
   if (mobileZoomLevel === next) return;
+  const zoomingIn = next > mobileZoomLevel;
   const applyZoom = () => {
+    if (relayoutTimer) {
+      clearTimeout(relayoutTimer);
+      relayoutTimer = null;
+    }
     mobileZoomLevel = next;
     persistMobileZoomLevel(next);
     grid.classList.toggle("zoomed", mobileZoomLevel > 1);
     applyMobileColumnSetting();
-    scheduleRelayout();
+    buildRows(filteredVideos.slice(0, renderCount), {
+      append: false,
+      isFinal: renderCount >= filteredVideos.length && serverExhausted,
+    });
   };
-  animateMobileZoomTransition(applyZoom);
+  animateMobileZoomTransition(applyZoom, { durationMs, zoomingIn });
 }
 
-function animateMobileZoomTransition(work) {
+function getVisibleGridCardRects() {
+  const rects = new Map();
+  if (!grid) return rects;
+  grid.querySelectorAll(".card[data-id]").forEach((card) => {
+    const id = card.dataset.id;
+    if (!id) return;
+    rects.set(id, card.getBoundingClientRect());
+  });
+  return rects;
+}
+
+function getMobileZoomAnchor() {
+  if (!grid) return null;
+  const cards = Array.from(grid.querySelectorAll(".card[data-id]"));
+  if (!cards.length) return null;
+  const viewportCenterY = window.innerHeight * 0.5;
+  let best = null;
+  let bestScore = Infinity;
+  cards.forEach((card) => {
+    const rect = card.getBoundingClientRect();
+    if (!rect.height) return;
+    const centerY = rect.top + rect.height / 2;
+    const score = Math.abs(centerY - viewportCenterY);
+    if (score < bestScore) {
+      bestScore = score;
+      best = {
+        id: card.dataset.id,
+        offsetTop: rect.top,
+      };
+    }
+  });
+  return best;
+}
+
+function getMobileZoomTransitionDuration(zoomingIn, durationMs) {
+  if (durationMs != null) return Math.max(120, Math.min(480, durationMs));
+  return zoomingIn ? 280 : 220;
+}
+
+function restoreAnchorAfterZoom(anchor) {
+  if (!anchor?.id) return;
+  const nextAnchor = grid.querySelector(`.card[data-id="${anchor.id}"]`);
+  if (!nextAnchor) return;
+  const rect = nextAnchor.getBoundingClientRect();
+  const anchorScrollDelta = rect.top - anchor.offsetTop;
+  if (Math.abs(anchorScrollDelta) > 0.5) {
+    window.scrollBy(0, anchorScrollDelta);
+  }
+}
+
+function applyInitialZoomCardTransforms(cards, beforeRects, zoomingIn) {
+  cards.forEach((card) => {
+    const prev = beforeRects.get(card.dataset.id);
+    if (!prev) return;
+    const next = card.getBoundingClientRect();
+    if (!next.width || !next.height) return;
+    const dx = prev.left - next.left;
+    const dy = prev.top - next.top;
+    const sx = prev.width / next.width;
+    const sy = prev.height / next.height;
+    if (
+      Math.abs(dx) < 0.5 &&
+      Math.abs(dy) < 0.5 &&
+      Math.abs(sx - 1) < 0.01 &&
+      Math.abs(sy - 1) < 0.01
+    ) {
+      return;
+    }
+    card.style.transition = "none";
+    card.style.transformOrigin = "top left";
+    card.style.transform = zoomingIn
+      ? `translate(${dx}px,${dy}px) scale(${sx},${sy})`
+      : `translate(${dx}px,${dy}px)`;
+  });
+}
+
+function getMobileZoomTransitionCss(zoomingIn, transitionMs) {
+  const opacityMs = zoomingIn
+    ? Math.max(160, transitionMs - 80)
+    : Math.max(140, transitionMs - 80);
+  const easing = zoomingIn
+    ? "cubic-bezier(.22,.7,.2,1)"
+    : "cubic-bezier(.2,.65,.2,1)";
+  return `transform ${transitionMs}ms ${easing}, opacity ${opacityMs}ms ease`;
+}
+
+function cleanupZoomCardTransforms(cards) {
+  cards.forEach((card) => {
+    card.style.transition = "";
+    card.style.transform = "";
+    card.style.transformOrigin = "";
+  });
+}
+
+function animateMobileZoomTransition(
+  work,
+  { zoomingIn = true, durationMs = null } = {},
+) {
   if (!grid) {
     work();
     return;
@@ -252,17 +399,31 @@ function animateMobileZoomTransition(work) {
     zoomFadeInTimer = null;
   }
   zoomTransitionActive = true;
-  grid.style.opacity = "0.25";
+  const transitionMs = getMobileZoomTransitionDuration(zoomingIn, durationMs);
+  const before = getVisibleGridCardRects();
+  const anchor = getMobileZoomAnchor();
+  work();
+  restoreAnchorAfterZoom(anchor);
+  const cards = Array.from(grid.querySelectorAll(".card[data-id]"));
+  applyInitialZoomCardTransforms(cards, before, zoomingIn);
+  void grid.getBoundingClientRect();
   zoomFadeOutTimer = window.setTimeout(() => {
     zoomFadeOutTimer = null;
-    work();
-    grid.style.opacity = "1";
+    window.requestAnimationFrame(() => {
+      cards.forEach((card) => {
+        card.style.transition = getMobileZoomTransitionCss(
+          zoomingIn,
+          transitionMs,
+        );
+        card.style.transform = "";
+      });
+    });
     zoomFadeInTimer = window.setTimeout(() => {
       zoomFadeInTimer = null;
-      grid.style.opacity = "";
+      cleanupZoomCardTransforms(cards);
       zoomTransitionActive = false;
-    }, ZOOM_FADER_DURATION);
-  }, ZOOM_FADER_DURATION);
+    }, transitionMs);
+  }, 16);
 }
 function getPreferredPlaybackMode(v, override = null) {
   if (override === "plex" || override === "direct") return override;
@@ -1623,7 +1784,7 @@ const TARGET_ROW_H = 260;
 const MIN_ROW_H = 190;
 const MAX_ROW_H = 340;
 const ZOOMED_TARGET_ROW_H = 200;
-const ZOOMED_MIN_ROW_H = 100;
+const ZOOMED_MIN_ROW_H = 60;
 const ZOOMED_MAX_ROW_H = 320;
 const ZOOMED_LANDSCAPE_MAX_ROW_H = 180;
 const ZOOMED_LANDSCAPE_MIN_ROW_H = 60;
@@ -1901,17 +2062,18 @@ function buildRows(items, { append = false, isFinal = false } = {}) {
     let h = targetRowH;
     const majorityLandscape =
       row.length && row.every((v) => getLayoutAr(v) > 1.2);
-    const localMinRowH = majorityLandscape
+    const desktopLandscapeFill = !mobileZoomed && majorityLandscape && row.length >= 2;
+    const localMinRowH = mobileZoomed && majorityLandscape
       ? ZOOMED_LANDSCAPE_MIN_ROW_H
       : minRowH;
-    const localMaxRowH = majorityLandscape
+    const localMaxRowH = mobileZoomed && majorityLandscape
       ? ZOOMED_LANDSCAPE_MAX_ROW_H
       : maxRowH;
-    if (!isLast || mobileZoomed) {
+    if (!isLast || mobileZoomed || desktopLandscapeFill) {
       h = computeHeight(row.length, sumAr);
       h = Math.max(localMinRowH, Math.min(localMaxRowH, h));
     }
-    if (majorityLandscape) {
+    if (mobileZoomed && majorityLandscape) {
       const widthPerCard =
         (W - GAP * Math.max(0, row.length - 1)) / Math.max(1, row.length);
       const heightCap = Math.max(ZOOMED_LANDSCAPE_MIN_ROW_H, widthPerCard / 1.15);
