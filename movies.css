@@ -14,10 +14,11 @@ button{cursor:pointer}
 .folder-options{max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:6px}
 .folder-opt{width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;color:var(--fg);white-space:normal;word-break:break-word;overflow-wrap:anywhere}
 .folder-opt.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(90,130,255,.35) inset}
-.grid{display:block;overflow:visible;padding-bottom:4px;width:100%;transition:gap .35s ease,opacity .35s ease}
+.grid{display:block;overflow:visible;padding-bottom:4px;width:100%;transition:gap .35s ease}
 .jrow{display:flex;gap:14px;align-items:flex-start;margin-bottom:12px}
 .grid .jrow,.grid .card{transition:transform .35s ease,opacity .35s ease}
 .grid .card{transition:transform .3s ease,opacity .3s ease}
+.grid.zoom-transition-live .card{will-change:transform}
 .grid.mobile{display:grid;grid-template-columns:repeat(var(--mobile-cols,4),minmax(0,1fr));gap:4px;align-items:stretch;transition:grid-template-columns .35s ease,gap .35s ease;padding:2px}
 .grid.mobile:not(.zoomed){gap:3px}
 .grid.mobile.zoomed{display:block}

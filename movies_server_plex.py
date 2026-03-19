@@ -80,6 +80,7 @@ class PlexAdapter:
             items: Dict[str, dict] = {}
             items_by_name_size: Dict[tuple[str, int], dict] = {}
             for skey in section_keys:
+                # Query Movies (type=1)
                 sec_xml = self._get_xml(f"/library/sections/{skey}/all", {"type": "1"})
                 for video in sec_xml.findall(".//Video"):
                     title = video.attrib.get("title", "")
@@ -101,6 +102,46 @@ class PlexAdapter:
                     subtitle_key = self._pick_subtitle_key(part)
 
                     # Avoid expensive filesystem resolve() on large/offline mounts.
+                    norm_file = str(Path(file_path).expanduser())
+                    try:
+                        part_size = int(part.attrib.get("size", "0") or 0)
+                    except Exception:
+                        part_size = 0
+                    item = {
+                        "title": title,
+                        "rating_key": rating_key,
+                        "thumb": thumb,
+                        "part_key": part_key,
+                        "subtitle_key": subtitle_key,
+                        "size": part_size,
+                        "file_name": Path(file_path).name.lower(),
+                        "poster_ar": 0.0,
+                    }
+                    items[norm_file] = item
+                    if part_size > 0:
+                        items_by_name_size[(Path(file_path).name.lower(), part_size)] = item
+
+                # Query TV Show Episodes (type=4)
+                sec_xml = self._get_xml(f"/library/sections/{skey}/all", {"type": "4"})
+                for video in sec_xml.findall(".//Video"):
+                    title = video.attrib.get("title", "")
+                    rating_key = video.attrib.get("ratingKey", "")
+                    thumb = video.attrib.get("thumb", "")
+
+                    media = video.find("Media")
+                    if media is None:
+                        continue
+                    part = media.find("Part")
+                    if part is None:
+                        continue
+
+                    file_path = part.attrib.get("file", "")
+                    part_key = part.attrib.get("key", "")
+                    if not file_path:
+                        continue
+
+                    subtitle_key = self._pick_subtitle_key(part)
+
                     norm_file = str(Path(file_path).expanduser())
                     try:
                         part_size = int(part.attrib.get("size", "0") or 0)
