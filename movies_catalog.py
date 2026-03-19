@@ -34,6 +34,8 @@ INDEX_STATE_PATH = Path(__file__).with_name("movies_catalog_index.json")
 INDEX_PROGRESS_PATH = Path(__file__).with_name("movies_catalog_tmp.json")
 PREVIEW_FRAME_COUNT = 12
 PREVIEW_WIDTH = 320
+FFPROBE_TIMEOUT = 12
+FFMPEG_TIMEOUT = 45
 
 
 def vid_id(path: Path) -> str:
@@ -60,6 +62,7 @@ class Catalog:
         transcode_enabled: bool = True,
         verify_passcode_fn=None,
         generate_thumbs: bool = True,
+        scan_checkpoint_cb=None,
     ):
         self.roots = roots
         self.thumbs_dir = thumbs_dir
@@ -70,6 +73,7 @@ class Catalog:
         ]
         self.private_passcode = str(private_passcode or "")
         self.verify_passcode = verify_passcode_fn or (lambda input_passcode, stored: False)
+        self.scan_checkpoint_cb = scan_checkpoint_cb
         self.thumbs_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._videos: List[dict] = []
@@ -88,6 +92,8 @@ class Catalog:
         self._thumb_total = 0
         self._thumb_done = 0
         self._preview_queue: List[str] = []
+        self._metadata_queue: List[str] = []
+        self._metadata_inflight: set[str] = set()
         self._transcode_queue: List[Path] = []
         self._transcode_inflight: set[str] = set()
         self._stop = threading.Event()
@@ -101,10 +107,34 @@ class Catalog:
         if self.generate_thumbs:
             threading.Thread(target=self._thumb_worker, daemon=True).start()
         threading.Thread(target=self._preview_worker, daemon=True).start()
+        threading.Thread(target=self._metadata_worker, daemon=True).start()
         if self.transcode_enabled:
             threading.Thread(target=self._transcode_worker, daemon=True).start()
 
         self._load_index(INDEX_STATE_PATH)
+
+    def _update_scan_progress(self, **fields):
+        with self._lock:
+            if not self.is_scanning:
+                return
+            self.scan_progress.update(fields)
+            self.scan_progress["updated_at"] = time.time()
+
+    def _queue_metadata_refresh(self, video_id: str):
+        if not video_id:
+            return
+        with self._lock:
+            if video_id in self._metadata_inflight or video_id in self._metadata_queue:
+                return
+            self._metadata_queue.append(video_id)
+
+    def pop_metadata_job(self):
+        with self._lock:
+            if not self._metadata_queue:
+                return None
+            video_id = self._metadata_queue.pop(0)
+            self._metadata_inflight.add(video_id)
+            return video_id
 
     def scan(self):
         with self._lock:
@@ -126,6 +156,8 @@ class Catalog:
                 "thumbs_pending": 0,
                 "previews_pending": 0,
                 "current_path": "",
+                "current_stage": "",
+                "metadata_pending": 0,
             }
             videos = [dict(v, mtime=0) for v in self._videos]
             vmap: Dict[str, Path] = dict(self.video_map)
@@ -230,6 +262,12 @@ class Catalog:
                 except Exception:
                     pass
 
+            if self.scan_checkpoint_cb:
+                try:
+                    self.scan_checkpoint_cb(scanning=scanning)
+                except Exception as exc:
+                    logging.debug("Scan checkpoint callback failed: %s", exc)
+
         def remove_root_from_accumulator(root_label: str):
             prefix = f"{root_label}/"
             removed_ids = {
@@ -311,7 +349,7 @@ class Catalog:
             except OSError:
                 return False
 
-        for root in existing_roots:
+        for root_index, root in enumerate(existing_roots, start=1):
             root_label = root.name
             processed_entries = 0
             root_video_count = 0
@@ -327,7 +365,7 @@ class Catalog:
                     {
                         "phase": "scanning",
                         "updated_at": time.time(),
-                        "root_index": existing_roots.index(root) + 1,
+                        "root_index": root_index,
                         "root_name": root_label,
                         "root_path": str(root),
                         "processed_entries": 0,
@@ -339,6 +377,8 @@ class Catalog:
                         "thumbs_pending": 0,
                         "previews_pending": 0,
                         "current_path": "",
+                        "current_stage": "",
+                        "metadata_pending": len(self._metadata_queue),
                     }
                 )
 
@@ -352,195 +392,199 @@ class Catalog:
             old_root_vmap = {video_id: vmap.get(video_id) for video_id in old_root_ids if video_id}
             remove_root_from_accumulator(root_label)
             seen_ids: set[str] = set()
+            last_progress_log_at = 0.0
 
-            for path in root.rglob("*"):
-                processed_entries += 1
-                if not path.is_file():
-                    continue
-                suffix = path.suffix.lower()
-                if suffix in SOURCE_EXTENSIONS:
-                    if self.transcode_enabled:
-                        transcode_jobs.append(path)
-                        if len(transcode_jobs) <= 5 or len(transcode_jobs) % 50 == 0:
-                            logging.info(
-                                "Scan transcode candidate [%s]: queued=%d file=%s",
-                                root_label,
-                                len(transcode_jobs),
-                                path,
-                            )
+            for dirpath, _, filenames in os.walk(root):
+                for filename in filenames:
+                    processed_entries += 1
+                    path = Path(dirpath) / filename
+                    suffix = path.suffix.lower()
+                    self._update_scan_progress(
+                        phase="scanning",
+                        root_index=root_index,
+                        root_name=root_label,
+                        root_path=str(root),
+                        processed_entries=processed_entries,
+                        videos_found=root_video_count,
+                        new_count=new_count,
+                        changed_count=changed_count,
+                        unchanged_count=unchanged_count,
+                        thumbs_pending=missing_thumb_count,
+                        previews_pending=missing_preview_count,
+                        metadata_pending=len(self._metadata_queue),
+                        current_path=str(path),
+                        current_stage="discovering",
+                    )
+                    if suffix in SOURCE_EXTENSIONS:
+                        if self.transcode_enabled:
+                            transcode_jobs.append(path)
+                            if len(transcode_jobs) <= 5 or len(transcode_jobs) % 50 == 0:
+                                logging.info(
+                                    "Scan transcode candidate [%s]: queued=%d file=%s",
+                                    root_label,
+                                    len(transcode_jobs),
+                                    path,
+                                )
+                            continue
+                    if suffix not in VIDEO_EXTENSIONS and not (
+                        suffix in SOURCE_EXTENSIONS and not self.transcode_enabled
+                    ):
                         continue
-                if suffix not in VIDEO_EXTENSIONS and not (
-                    suffix in SOURCE_EXTENSIONS and not self.transcode_enabled
-                ):
-                    continue
 
-                stat = path.stat()
-                video_id = vid_id(path)
-                seen_ids.add(video_id)
-                rel_under_root = os.path.relpath(path, root)
-                rel = f"{root_label}/{rel_under_root}"
-                parent = Path(rel_under_root).parent
-                folder = f"{root_label}/" + (
-                    str(parent) if parent != Path(".") else "(root)"
-                )
-                thumb = self.thumbs_dir / f"{video_id}.jpg"
-                preview_dir = self.thumbs_dir / "previews" / video_id
+                    stat = path.stat()
+                    video_id = vid_id(path)
+                    seen_ids.add(video_id)
+                    rel_under_root = os.path.relpath(path, root)
+                    rel = f"{root_label}/{rel_under_root}"
+                    parent = Path(rel_under_root).parent
+                    folder = f"{root_label}/" + (
+                        str(parent) if parent != Path(".") else "(root)"
+                    )
+                    thumb = self.thumbs_dir / f"{video_id}.jpg"
+                    preview_dir = self.thumbs_dir / "previews" / video_id
 
-                file_key = str(path)
-                file_sig = (float(stat.st_mtime), int(stat.st_size))
-                cached_sig = self._file_sig_cache.get(file_key)
-                cached_meta = self._file_meta_cache.get(file_key, {}) if cached_sig == file_sig else {}
-                if cached_sig is None:
-                    new_count += 1
-                elif cached_sig == file_sig:
-                    unchanged_count += 1
-                else:
-                    changed_count += 1
+                    file_key = str(path)
+                    file_sig = (float(stat.st_mtime), int(stat.st_size))
+                    cached_sig = self._file_sig_cache.get(file_key)
+                    cached_meta = self._file_meta_cache.get(file_key, {}) if cached_sig == file_sig else {}
+                    if cached_sig is None:
+                        new_count += 1
+                    elif cached_sig == file_sig:
+                        unchanged_count += 1
+                    else:
+                        changed_count += 1
 
-                thumb_ready_cached = bool(cached_meta.get("thumb_ready", False))
-                preview_ready_cached = bool(cached_meta.get("preview_ready", False))
-                subtitle_ready_cached = bool(cached_meta.get("subtitle_ready", False))
+                    thumb_ready_cached = bool(cached_meta.get("thumb_ready", False))
+                    preview_ready_cached = bool(cached_meta.get("preview_ready", False))
+                    subtitle_ready_cached = bool(cached_meta.get("subtitle_ready", False))
 
-                has_thumb = False
-                try:
-                    if thumb_ready_cached:
-                        has_thumb = thumb.exists()
-                    elif thumb.exists():
-                        has_thumb = thumb.stat().st_mtime >= stat.st_mtime
-                except OSError:
                     has_thumb = False
+                    try:
+                        if thumb_ready_cached:
+                            has_thumb = thumb.exists()
+                        elif thumb.exists():
+                            has_thumb = thumb.stat().st_mtime >= stat.st_mtime
+                    except OSError:
+                        has_thumb = False
 
-                if preview_ready_cached:
-                    previews_ready = preview_frames_ready_fast(preview_dir)
-                else:
-                    previews_ready = preview_frames_ready_full(preview_dir, stat.st_mtime)
+                    if preview_ready_cached:
+                        previews_ready = preview_frames_ready_fast(preview_dir)
+                    else:
+                        previews_ready = preview_frames_ready_full(preview_dir, stat.st_mtime)
 
-                subtitle_path = None
-                cached_subtitle = str(cached_meta.get("subtitle_path", "") or "")
-                if subtitle_ready_cached and cached_subtitle:
-                    subtitle_candidate = Path(cached_subtitle)
-                    if subtitle_candidate.exists():
-                        subtitle_path = subtitle_candidate
-                if subtitle_path is None:
-                    subtitle_path = self._resolve_sidecar_subtitle(path)
-                has_subtitle = bool(subtitle_path and subtitle_path.exists())
+                    old_item = old_items_by_path.get(file_key)
+                    needs_metadata_refresh = cached_sig != file_sig
+                    subtitle_path = None
+                    cached_subtitle = str(cached_meta.get("subtitle_path", "") or "")
+                    if subtitle_ready_cached and cached_subtitle:
+                        subtitle_candidate = Path(cached_subtitle)
+                        if subtitle_candidate.exists():
+                            subtitle_path = subtitle_candidate
+                    has_subtitle = bool(subtitle_path and subtitle_path.exists())
 
-                aspect = float(cached_meta.get("ar", 0) or 0) or (
-                    self._probe_aspect(path) or 1.6
-                )
-                cached_audio_codes = []
-                if cached_sig == file_sig:
-                    cached_audio_codes = list(cached_meta.get("audio_codecs", []))
-                if cached_audio_codes:
-                    audio_codecs = cached_audio_codes
-                elif suffix in DIRECT_AUDIO_EXTENSIONS:
-                    audio_codecs = self._probe_audio_codecs(path)
-                else:
-                    audio_codecs = []
-                self._file_sig_cache[file_key] = file_sig
-                self._file_meta_cache[file_key] = {
-                    "ar": aspect,
-                    "subtitle_path": str(subtitle_path) if subtitle_path else "",
-                    "thumb_ready": bool(has_thumb),
-                    "preview_ready": bool(previews_ready),
-                    "subtitle_ready": bool(has_subtitle),
-                    "audio_codecs": list(audio_codecs),
-                }
-
-                old_item = old_items_by_path.get(file_key)
-                if cached_sig == file_sig and old_item:
-                    item = dict(old_item)
-                    item["mtime"] = stat.st_mtime
-                    item["ar"] = aspect
-                    item["size"] = fmt_size(stat.st_size)
-                    item["thumb_url"] = (
-                        f"/thumbs/{video_id}.jpg" if has_thumb else "/thumbs/placeholder.jpg"
-                    )
-                    item["subtitle_url"] = f"/subtitle/{video_id}.vtt" if has_subtitle else ""
-                    item["preview_urls"] = (
-                        [
-                            f"/thumbs/prev/{video_id}/{index:02d}.jpg"
-                            for index in range(1, PREVIEW_FRAME_COUNT + 1)
-                        ]
-                        if previews_ready
-                        else []
-                    )
-                    item["audio_codecs"] = list(audio_codecs)
-                else:
-                    item = {
-                        "id": video_id,
-                        "name": path.name,
-                        "relative_path": rel,
-                        "folder": folder,
-                        "size": fmt_size(stat.st_size),
-                        "mtime": stat.st_mtime,
+                    if cached_sig == file_sig:
+                        aspect = float(cached_meta.get("ar", 0) or 0) or 1.6
+                        audio_codecs = list(cached_meta.get("audio_codecs", []))
+                    else:
+                        aspect = float((old_item or {}).get("ar", 0) or 0) or 1.6
+                        audio_codecs = list((old_item or {}).get("audio_codecs", []) or [])
+                    self._file_sig_cache[file_key] = file_sig
+                    self._file_meta_cache[file_key] = {
                         "ar": aspect,
-                        "video_url": f"/video/{video_id}",
-                        "thumb_url": (
-                            f"/thumbs/{video_id}.jpg"
-                            if has_thumb
-                            else "/thumbs/placeholder.jpg"
-                        ),
-                        "subtitle_url": (
-                            f"/subtitle/{video_id}.vtt" if has_subtitle else ""
-                        ),
-                        "preview_urls": (
+                        "subtitle_path": str(subtitle_path) if subtitle_path else "",
+                        "thumb_ready": bool(has_thumb),
+                        "preview_ready": bool(previews_ready),
+                        "subtitle_ready": bool(has_subtitle),
+                        "audio_codecs": list(audio_codecs),
+                    }
+
+                    if cached_sig == file_sig and old_item:
+                        item = dict(old_item)
+                        item["mtime"] = stat.st_mtime
+                        item["ar"] = aspect
+                        item["size"] = fmt_size(stat.st_size)
+                        item["thumb_url"] = (
+                            f"/thumbs/{video_id}.jpg" if has_thumb else "/thumbs/placeholder.jpg"
+                        )
+                        item["subtitle_url"] = f"/subtitle/{video_id}.vtt" if has_subtitle else ""
+                        item["preview_urls"] = (
                             [
                                 f"/thumbs/prev/{video_id}/{index:02d}.jpg"
                                 for index in range(1, PREVIEW_FRAME_COUNT + 1)
                             ]
                             if previews_ready
                             else []
-                        ),
-                        "audio_codecs": list(audio_codecs),
-                    }
-                videos.append(item)
-                root_video_count += 1
-                if root_video_count % 100 == 0:
-                    commit_snapshot(scanning=True, persist_progress=True)
-                vmap[video_id] = path
-                tmap[video_id] = thumb
-                pdir_map[video_id] = preview_dir
-                if has_subtitle and subtitle_path:
-                    smap[video_id] = subtitle_path
-                if self.generate_thumbs and not has_thumb:
-                    queue_missing_job(thumb_queue, video_id)
-                    missing_thumb_count += 1
-                if not previews_ready:
-                    queue_missing_job(preview_queue, video_id)
-                    missing_preview_count += 1
-
-                if processed_entries % 100 == 0:
-                    with self._lock:
-                        self.scan_progress.update(
-                            {
-                                "updated_at": time.time(),
-                                "processed_entries": processed_entries,
-                                "videos_found": root_video_count,
-                                "new_count": new_count,
-                                "changed_count": changed_count,
-                                "unchanged_count": unchanged_count,
-                                "thumbs_pending": missing_thumb_count,
-                                "previews_pending": missing_preview_count,
-                                "current_path": str(path),
-                            }
+                        )
+                        item["audio_codecs"] = list(audio_codecs)
+                    else:
+                        item = {
+                            "id": video_id,
+                            "name": path.name,
+                            "relative_path": rel,
+                            "folder": folder,
+                            "size": fmt_size(stat.st_size),
+                            "mtime": stat.st_mtime,
+                            "ar": aspect,
+                            "video_url": f"/video/{video_id}",
+                            "thumb_url": (
+                                f"/thumbs/{video_id}.jpg"
+                                if has_thumb
+                                else "/thumbs/placeholder.jpg"
+                            ),
+                            "subtitle_url": (
+                                f"/subtitle/{video_id}.vtt" if has_subtitle else ""
+                            ),
+                            "preview_urls": (
+                                [
+                                    f"/thumbs/prev/{video_id}/{index:02d}.jpg"
+                                    for index in range(1, PREVIEW_FRAME_COUNT + 1)
+                                ]
+                                if previews_ready
+                                else []
+                            ),
+                            "audio_codecs": list(audio_codecs),
+                        }
+                    videos.append(item)
+                    root_video_count += 1
+                    if root_video_count % 100 == 0:
+                        commit_snapshot(scanning=True, persist_progress=True)
+                    vmap[video_id] = path
+                    tmap[video_id] = thumb
+                    pdir_map[video_id] = preview_dir
+                    if has_subtitle and subtitle_path:
+                        smap[video_id] = subtitle_path
+                    else:
+                        smap.pop(video_id, None)
+                    if self.generate_thumbs and not has_thumb:
+                        queue_missing_job(thumb_queue, video_id)
+                        missing_thumb_count += 1
+                    if not previews_ready:
+                        queue_missing_job(preview_queue, video_id)
+                        missing_preview_count += 1
+                    if needs_metadata_refresh:
+                        self._queue_metadata_refresh(video_id)
+                        self._update_scan_progress(
+                            metadata_pending=len(self._metadata_queue),
                         )
 
-                if processed_entries % 500 == 0:
-                    elapsed = max(0.001, time.time() - root_started_at)
-                    logging.info(
-                        "Scan progress [%s]: processed=%d videos=%d new=%d changed=%d unchanged=%d thumbs_pending=%d previews_pending=%d rate=%.1f entries/s current=%s",
-                        root_label,
-                        processed_entries,
-                        root_video_count,
-                        new_count,
-                        changed_count,
-                        unchanged_count,
-                        missing_thumb_count,
-                        missing_preview_count,
-                        processed_entries / elapsed,
-                        path,
-                    )
+                    now_ts = time.time()
+                    if now_ts - last_progress_log_at >= 2.0:
+                        elapsed = max(0.001, now_ts - root_started_at)
+                        logging.info(
+                            "Scan progress [%s]: processed=%d videos=%d new=%d changed=%d unchanged=%d thumbs_pending=%d previews_pending=%d metadata_pending=%d rate=%.1f entries/s current=%s",
+                            root_label,
+                            processed_entries,
+                            root_video_count,
+                            new_count,
+                            changed_count,
+                            unchanged_count,
+                            missing_thumb_count,
+                            missing_preview_count,
+                            len(self._metadata_queue),
+                            processed_entries / elapsed,
+                            path,
+                        )
+                        last_progress_log_at = now_ts
 
             removed_ids = {video_id for video_id in old_root_ids if video_id not in seen_ids}
             logging.info(
@@ -567,7 +611,9 @@ class Catalog:
                         "removed_count": len(removed_ids),
                         "thumbs_pending": missing_thumb_count,
                         "previews_pending": missing_preview_count,
+                        "metadata_pending": len(self._metadata_queue),
                         "current_path": "",
+                        "current_stage": "",
                     }
                 )
             cleanup_removed_ids(
@@ -597,6 +643,8 @@ class Catalog:
             self._audio_codec_cache.clear()
             self._thumb_queue = []
             self._preview_queue = []
+            self._metadata_queue = []
+            self._metadata_inflight.clear()
             self._thumb_total = 0
             self._thumb_done = 0
         logging.info("Catalog scan state invalidated: next scan will run in full rebuild mode")
@@ -631,10 +679,27 @@ class Catalog:
 
     def status(self):
         with self._lock:
+            thumb_pending = len(self._thumb_queue)
+            preview_pending = len(self._preview_queue)
+            metadata_pending = len(self._metadata_queue) + len(self._metadata_inflight)
+            scan_progress = dict(self.scan_progress or {})
+            background_work = {
+                "thumbs_pending": thumb_pending,
+                "thumbs_total": int(self._thumb_total or 0),
+                "thumbs_done": int(self._thumb_done or 0),
+                "previews_pending": preview_pending,
+                "metadata_pending": metadata_pending,
+                "metadata_inflight": len(self._metadata_inflight),
+            }
+            if scan_progress:
+                scan_progress.setdefault("thumbs_pending", thumb_pending)
+                scan_progress.setdefault("previews_pending", preview_pending)
+                scan_progress.setdefault("metadata_pending", metadata_pending)
             return {
                 "available": self.available,
                 "is_scanning": self.is_scanning,
-                "scan_progress": dict(self.scan_progress or {}),
+                "scan_progress": scan_progress,
+                "background_work": background_work,
                 "last_error": self.last_error,
                 "last_scan_at": self.last_scan_at,
                 "video_count": len(self._public_videos or self._videos),
@@ -823,6 +888,97 @@ class Catalog:
                     ]
                     break
 
+    def _update_video_metadata(
+        self,
+        video_id: str,
+        *,
+        aspect: float | None = None,
+        subtitle_path: Path | None = None,
+        audio_codecs: List[str] | None = None,
+    ):
+        with self._lock:
+            video_path = self.video_map.get(video_id)
+            if not video_path:
+                return
+            file_key = str(video_path)
+            meta = dict(self._file_meta_cache.get(file_key, {}))
+            if aspect and aspect > 0:
+                meta["ar"] = float(aspect)
+            if subtitle_path and subtitle_path.exists():
+                meta["subtitle_path"] = str(subtitle_path)
+                meta["subtitle_ready"] = True
+                self.subtitle_map[video_id] = subtitle_path
+            else:
+                meta["subtitle_path"] = ""
+                meta["subtitle_ready"] = False
+                self.subtitle_map.pop(video_id, None)
+            if audio_codecs is not None:
+                meta["audio_codecs"] = list(audio_codecs)
+                self._audio_codec_cache[file_key] = list(audio_codecs)
+            self._file_meta_cache[file_key] = meta
+            subtitle_url = f"/subtitle/{video_id}.vtt" if subtitle_path and subtitle_path.exists() else ""
+            for collection in (self._videos, self._public_videos):
+                for video in collection:
+                    if video.get("id") != video_id:
+                        continue
+                    if aspect and aspect > 0:
+                        video["ar"] = float(aspect)
+                    video["subtitle_url"] = subtitle_url
+                    if audio_codecs is not None:
+                        video["audio_codecs"] = list(audio_codecs)
+                    break
+            scanning = self.is_scanning
+        now_ts = time.time()
+        if (not scanning) and (now_ts - self._last_index_persist_at >= 15):
+            self._save_index(INDEX_STATE_PATH)
+            self._last_index_persist_at = now_ts
+
+    def _probe_video_metadata(self, video_id: str):
+        with self._lock:
+            video_path = self.video_map.get(video_id)
+        if not video_path or not video_path.exists():
+            return
+        self._update_scan_progress(
+            current_path=str(video_path),
+            current_stage="metadata",
+        )
+        aspect = self._probe_aspect(video_path) or 1.6
+        self._update_scan_progress(
+            current_path=str(video_path),
+            current_stage="subtitle",
+        )
+        subtitle_path = self._resolve_sidecar_subtitle(video_path)
+        if video_path.suffix.lower() in DIRECT_AUDIO_EXTENSIONS:
+            self._update_scan_progress(
+                current_path=str(video_path),
+                current_stage="audio",
+            )
+            audio_codecs = self._probe_audio_codecs(video_path)
+        else:
+            audio_codecs = []
+        self._update_video_metadata(
+            video_id,
+            aspect=aspect,
+            subtitle_path=subtitle_path,
+            audio_codecs=audio_codecs,
+        )
+
+    def _metadata_worker(self):
+        while not self._stop.is_set():
+            video_id = self.pop_metadata_job()
+            if not video_id:
+                time.sleep(0.25)
+                continue
+            try:
+                self._probe_video_metadata(video_id)
+            except Exception as exc:
+                logging.debug("Metadata refresh failed for %s: %s", video_id, exc)
+            finally:
+                with self._lock:
+                    self._metadata_inflight.discard(video_id)
+                    pending = len(self._metadata_queue) + len(self._metadata_inflight)
+                self._update_scan_progress(metadata_pending=pending)
+
     def _thumb_worker(self):
         while not self._stop.is_set():
             job = self.pop_thumb_job()
@@ -895,6 +1051,7 @@ class Catalog:
                         str(video_path),
                     ],
                     stderr=subprocess.DEVNULL,
+                    timeout=FFPROBE_TIMEOUT,
                 )
                 .decode("utf-8", "ignore")
                 .strip()
@@ -933,6 +1090,7 @@ class Catalog:
                         str(video_path),
                     ],
                     stderr=subprocess.DEVNULL,
+                    timeout=FFPROBE_TIMEOUT,
                 )
                 .decode("utf-8", "ignore")
                 .strip()
@@ -964,6 +1122,7 @@ class Catalog:
                         str(video_path),
                     ],
                     stderr=subprocess.DEVNULL,
+                    timeout=FFPROBE_TIMEOUT,
                 )
                 .decode("utf-8", "ignore")
                 .strip()
@@ -1014,6 +1173,7 @@ class Catalog:
                 [FFPROBE, "-v", "quiet", "-print_format", "json", "-show_streams", str(mkv_path)],
                 capture_output=True,
                 text=True,
+                timeout=FFPROBE_TIMEOUT,
             )
             if probe.returncode != 0:
                 return None
@@ -1050,6 +1210,7 @@ class Catalog:
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                timeout=FFMPEG_TIMEOUT,
             )
             self._srt_to_vtt(tmp_srt, target_vtt)
             try:
@@ -1109,6 +1270,7 @@ class Catalog:
                         check=True,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
+                        timeout=FFMPEG_TIMEOUT,
                     )
                 return target_vtt if target_vtt.exists() else None
             except Exception as exc:
