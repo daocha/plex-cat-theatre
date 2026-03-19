@@ -56,6 +56,13 @@ app.wsgi_app = StripPrefixMiddleware(app.wsgi_app)
 
 catalog = None
 plex_adapter: PlexAdapter | None = None
+PLEX_OVERLAY_LOCK = threading.Lock()
+PLEX_OVERLAY_RUNNING = False
+PLEX_OVERLAY_PENDING = False
+PLEX_OVERLAY_PENDING_PERSIST = False
+PLEX_OVERLAY_PENDING_FORCE = False
+PLEX_OVERLAY_LAST_RUN = 0.0
+PLEX_OVERLAY_MIN_INTERVAL = 3.0
 APP_INSTANCE = None
 ON_DEMAND_TRANSCODE = False
 HWACCEL_CODEC = "h264_videotoolbox"
@@ -240,6 +247,61 @@ def rebuild_plex_overlay_into_catalog(persist_index: bool = True):
             catalog._save_index(Path(__file__).with_name("movies_catalog_index.json"))
     except Exception as exc:
         logging.warning("Plex overlay rebuild failed: %s", exc)
+
+
+def schedule_plex_overlay_refresh(
+    persist_index: bool = False,
+    force_refresh: bool = False,
+):
+    global PLEX_OVERLAY_RUNNING, PLEX_OVERLAY_PENDING, PLEX_OVERLAY_PENDING_PERSIST
+    global PLEX_OVERLAY_PENDING_FORCE, PLEX_OVERLAY_LAST_RUN
+    if not plex_adapter or not plex_adapter.enabled:
+        return
+
+    def _run():
+        global PLEX_OVERLAY_RUNNING, PLEX_OVERLAY_PENDING, PLEX_OVERLAY_PENDING_PERSIST
+        global PLEX_OVERLAY_PENDING_FORCE, PLEX_OVERLAY_LAST_RUN
+        while True:
+            pending_persist = False
+            pending_force = False
+            with PLEX_OVERLAY_LOCK:
+                now = time.time()
+                if (not PLEX_OVERLAY_PENDING_FORCE) and (
+                    now - PLEX_OVERLAY_LAST_RUN < PLEX_OVERLAY_MIN_INTERVAL
+                ):
+                    delay = PLEX_OVERLAY_MIN_INTERVAL - (now - PLEX_OVERLAY_LAST_RUN)
+                else:
+                    delay = 0.0
+            if delay > 0:
+                time.sleep(delay)
+            with PLEX_OVERLAY_LOCK:
+                pending_persist = PLEX_OVERLAY_PENDING_PERSIST
+                pending_force = PLEX_OVERLAY_PENDING_FORCE
+                PLEX_OVERLAY_PENDING = False
+                PLEX_OVERLAY_PENDING_PERSIST = False
+                PLEX_OVERLAY_PENDING_FORCE = False
+            try:
+                ensure_plex_catalog_binding(force_refresh=pending_force)
+                rebuild_plex_overlay_into_catalog(persist_index=pending_persist)
+            finally:
+                with PLEX_OVERLAY_LOCK:
+                    PLEX_OVERLAY_LAST_RUN = time.time()
+                    rerun = bool(PLEX_OVERLAY_PENDING)
+                    if not rerun:
+                        PLEX_OVERLAY_RUNNING = False
+            if not rerun:
+                break
+
+    with PLEX_OVERLAY_LOCK:
+        PLEX_OVERLAY_PENDING = True
+        PLEX_OVERLAY_PENDING_PERSIST = (
+            PLEX_OVERLAY_PENDING_PERSIST or persist_index
+        )
+        PLEX_OVERLAY_PENDING_FORCE = PLEX_OVERLAY_PENDING_FORCE or force_refresh
+        if PLEX_OVERLAY_RUNNING:
+            return
+        PLEX_OVERLAY_RUNNING = True
+    threading.Thread(target=_run, daemon=True).start()
 
 
 @app.route("/")
@@ -505,7 +567,7 @@ def rescan():
             if force_full:
                 catalog.invalidate_scan_state()
             catalog.scan()
-            rebuild_plex_overlay_into_catalog(persist_index=True)
+            schedule_plex_overlay_refresh(persist_index=True, force_refresh=True)
         except Exception as exc:
             try:
                 with catalog._lock:
@@ -1125,6 +1187,14 @@ class App:
             transcode_enabled=cfg.get("transcode", True),
             verify_passcode_fn=verify_passcode,
             generate_thumbs=not plex_enabled,
+            scan_checkpoint_cb=(
+                (lambda scanning: schedule_plex_overlay_refresh(
+                    persist_index=not scanning,
+                    force_refresh=False,
+                ))
+                if plex_enabled
+                else None
+            ),
         )
         self.host = cfg.get("host", "0.0.0.0")
         self.port = int(cfg.get("port", DEFAULT_PORT))
@@ -1167,12 +1237,15 @@ class App:
 
             def startup_scan():
                 catalog.scan()
-                rebuild_plex_overlay_into_catalog(persist_index=True)
+                schedule_plex_overlay_refresh(persist_index=True, force_refresh=True)
 
             threading.Thread(target=startup_scan, daemon=True).start()
         else:
             threading.Thread(
-                target=lambda: rebuild_plex_overlay_into_catalog(persist_index=False),
+                target=lambda: schedule_plex_overlay_refresh(
+                    persist_index=False,
+                    force_refresh=True,
+                ),
                 daemon=True,
             ).start()
 
