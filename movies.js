@@ -231,10 +231,28 @@ function setMobileZoomLevel(level) {
     applyMobileColumnSetting();
     scheduleRelayout();
   };
-  animateMobileZoomTransition(applyZoom);
+  animateMobileZoomTransition(applyZoom, {
+    zoomingIn: next > mobileZoomLevel,
+  });
 }
 
-function animateMobileZoomTransition(work) {
+function createMobileZoomSnapshot() {
+  if (!grid) return null;
+  const rect = grid.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const snapshot = grid.cloneNode(true);
+  snapshot.removeAttribute("id");
+  snapshot.classList.remove("zoom-transition-live", "zoom-transition-in");
+  snapshot.classList.add("zoom-snapshot");
+  snapshot.style.left = `${Math.round(rect.left)}px`;
+  snapshot.style.top = `${Math.round(rect.top)}px`;
+  snapshot.style.width = `${Math.round(rect.width)}px`;
+  snapshot.style.height = `${Math.round(rect.height)}px`;
+  document.body.appendChild(snapshot);
+  return snapshot;
+}
+
+function animateMobileZoomTransition(work, { zoomingIn = true } = {}) {
   if (!grid) {
     work();
     return;
@@ -252,14 +270,29 @@ function animateMobileZoomTransition(work) {
     zoomFadeInTimer = null;
   }
   zoomTransitionActive = true;
-  grid.style.opacity = "0.25";
+  const snapshot = createMobileZoomSnapshot();
+  grid.classList.remove("zoom-transition-in");
+  grid.classList.add("zoom-transition-live");
+  if (snapshot) {
+    snapshot.classList.toggle("zoom-in", zoomingIn);
+    snapshot.classList.toggle("zoom-out", !zoomingIn);
+    window.requestAnimationFrame(() => {
+      snapshot.classList.add("animating");
+    });
+  }
   zoomFadeOutTimer = window.setTimeout(() => {
     zoomFadeOutTimer = null;
     work();
-    grid.style.opacity = "1";
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        grid.classList.remove("zoom-transition-live");
+        grid.classList.add("zoom-transition-in");
+      });
+    });
     zoomFadeInTimer = window.setTimeout(() => {
       zoomFadeInTimer = null;
-      grid.style.opacity = "";
+      grid.classList.remove("zoom-transition-in");
+      if (snapshot && snapshot.parentNode) snapshot.parentNode.removeChild(snapshot);
       zoomTransitionActive = false;
     }, ZOOM_FADER_DURATION);
   }, ZOOM_FADER_DURATION);
@@ -1623,7 +1656,7 @@ const TARGET_ROW_H = 260;
 const MIN_ROW_H = 190;
 const MAX_ROW_H = 340;
 const ZOOMED_TARGET_ROW_H = 200;
-const ZOOMED_MIN_ROW_H = 100;
+const ZOOMED_MIN_ROW_H = 60;
 const ZOOMED_MAX_ROW_H = 320;
 const ZOOMED_LANDSCAPE_MAX_ROW_H = 180;
 const ZOOMED_LANDSCAPE_MIN_ROW_H = 60;
@@ -1901,17 +1934,18 @@ function buildRows(items, { append = false, isFinal = false } = {}) {
     let h = targetRowH;
     const majorityLandscape =
       row.length && row.every((v) => getLayoutAr(v) > 1.2);
-    const localMinRowH = majorityLandscape
+    const desktopLandscapeFill = !mobileZoomed && majorityLandscape && row.length >= 2;
+    const localMinRowH = mobileZoomed && majorityLandscape
       ? ZOOMED_LANDSCAPE_MIN_ROW_H
       : minRowH;
-    const localMaxRowH = majorityLandscape
+    const localMaxRowH = mobileZoomed && majorityLandscape
       ? ZOOMED_LANDSCAPE_MAX_ROW_H
       : maxRowH;
-    if (!isLast || mobileZoomed) {
+    if (!isLast || mobileZoomed || desktopLandscapeFill) {
       h = computeHeight(row.length, sumAr);
       h = Math.max(localMinRowH, Math.min(localMaxRowH, h));
     }
-    if (majorityLandscape) {
+    if (mobileZoomed && majorityLandscape) {
       const widthPerCard =
         (W - GAP * Math.max(0, row.length - 1)) / Math.max(1, row.length);
       const heightCap = Math.max(ZOOMED_LANDSCAPE_MIN_ROW_H, widthPerCard / 1.15);
