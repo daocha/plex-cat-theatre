@@ -174,6 +174,7 @@ let pinchTracking = {
   lastTs: 0,
   startTs: 0,
   pendingLevel: null,
+  triggered: false,
 };
 
 function getTouchDistance(touches) {
@@ -189,6 +190,7 @@ function resetPinchTracking() {
   pinchTracking.lastTs = 0;
   pinchTracking.startTs = 0;
   pinchTracking.pendingLevel = null;
+  pinchTracking.triggered = false;
 }
 
 function updatePinchTracking(distance, timestamp) {
@@ -226,6 +228,17 @@ function handlePinchMove(event) {
   const delta = dist - pinchTracking.baseDist;
   if (Math.abs(delta) >= PINCH_TRIGGER_DISTANCE) {
     pinchTracking.pendingLevel = delta > 0 ? 2 : 1;
+    if (
+      !pinchTracking.triggered &&
+      !zoomTransitionActive &&
+      pinchTracking.pendingLevel !== mobileZoomLevel
+    ) {
+      pinchTracking.triggered = true;
+      pinchTracking.active = false;
+      setMobileZoomLevel(pinchTracking.pendingLevel, {
+        durationMs: getPinchAnimationDuration(performance.now()),
+      });
+    }
   }
   updatePinchTracking(dist, performance.now());
   event.preventDefault();
@@ -236,7 +249,11 @@ function handlePinchEnd(event) {
     const targetLevel = pinchTracking.pendingLevel;
     const endTs = performance.now();
     pinchTracking.active = false;
-    if (targetLevel && targetLevel !== mobileZoomLevel) {
+    if (
+      !pinchTracking.triggered &&
+      targetLevel &&
+      targetLevel !== mobileZoomLevel
+    ) {
       setMobileZoomLevel(targetLevel, {
         durationMs: getPinchAnimationDuration(endTs),
       });
@@ -407,23 +424,21 @@ function animateMobileZoomTransition(
   const cards = Array.from(grid.querySelectorAll(".card[data-id]"));
   applyInitialZoomCardTransforms(cards, before, zoomingIn);
   void grid.getBoundingClientRect();
-  zoomFadeOutTimer = window.setTimeout(() => {
+  zoomFadeOutTimer = window.requestAnimationFrame(() => {
     zoomFadeOutTimer = null;
-    window.requestAnimationFrame(() => {
-      cards.forEach((card) => {
-        card.style.transition = getMobileZoomTransitionCss(
-          zoomingIn,
-          transitionMs,
-        );
-        card.style.transform = "";
-      });
+    cards.forEach((card) => {
+      card.style.transition = getMobileZoomTransitionCss(
+        zoomingIn,
+        transitionMs,
+      );
+      card.style.transform = "";
     });
     zoomFadeInTimer = window.setTimeout(() => {
       zoomFadeInTimer = null;
       cleanupZoomCardTransforms(cards);
       zoomTransitionActive = false;
     }, transitionMs);
-  }, 16);
+  });
 }
 function getPreferredPlaybackMode(v, override = null) {
   if (override === "plex" || override === "direct") return override;
@@ -1269,6 +1284,7 @@ let currentVideoId = null;
 let currentVideoRecord = null;
 let hlsLoadingPromise = null;
 let backgroundPageLoading = false;
+let playerSessionId = 0;
 const ENABLE_PREVIEW_FRAMES = true;
 
 function getPreviewFrameUrls(video) {
@@ -1318,6 +1334,8 @@ function loadHlsLibrary() {
   return hlsLoadingPromise;
 }
 async function openPlayer(urlOrCandidates, name, subtitleUrl) {
+  const sessionId = ++playerSessionId;
+  const isActiveSession = () => sessionId === playerSessionId;
   if (folderPanel) folderPanel.style.display = "none";
   const candidates = Array.isArray(urlOrCandidates)
     ? urlOrCandidates.filter(Boolean)
@@ -1374,6 +1392,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
   mvideo.removeAttribute("src");
   mvideo.load();
   const startPlayback = async (url) => {
+    if (!isActiveSession()) return;
     if (!url) {
       mvideo.src = fallbackVideoUrl || "";
       return;
@@ -1388,6 +1407,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
             ? window.Hls.isSupported()
             : false;
         const loaded = hasHls ? true : await loadHlsLibrary();
+        if (!isActiveSession()) return;
         if (loaded && window.Hls && window.Hls.isSupported()) {
           let recoverCount = 0;
           hlsPlayer = new Hls({
@@ -1445,12 +1465,14 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
   msub.style.display = "none";
   mclose.style.display = "none";
   const attachSubtitleTrack = async () => {
+    if (!isActiveSession()) return;
     if (!resolvedSubtitle) {
       msub.style.display = "none";
       return;
     }
     try {
       const trackSrc = await resolveSubtitleTrackSrc(resolvedSubtitle);
+      if (!isActiveSession()) return;
       const track = document.createElement("track");
       track.kind = "subtitles";
       track.label = "Chinese (Traditional)";
@@ -1494,6 +1516,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     candidateFallbackTimer = null;
   };
   const advanceCandidate = () => {
+    if (!isActiveSession()) return;
     clearCandidateFallbackTimer();
     if (candidateIdx < candidates.length) {
       tryNextCandidate();
@@ -1502,6 +1525,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     revealPlayer();
   };
   const revealPlayer = () => {
+    if (!isActiveSession()) return;
     if (revealed) {
       relayoutModalBox();
       return;
@@ -1542,6 +1566,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
   };
   let candidateIdx = 0;
   const tryNextCandidate = async () => {
+    if (!isActiveSession()) return;
     const attemptId = ++candidateAttemptId;
     const next = candidates[candidateIdx++] || fallbackVideoUrl || "";
     activeUrl = next;
@@ -1555,6 +1580,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     updateDebugPanel();
     clearCandidateFallbackTimer();
     await startPlayback(next);
+    if (!isActiveSession() || attemptId !== candidateAttemptId) return;
     if (!subtitleAttachStarted) {
       subtitleAttachStarted = true;
       attachSubtitleTrack();
@@ -1568,7 +1594,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
       candidateFallbackTimer = null;
     }
     mvideo.play().catch((err) => {
-      if (attemptId !== candidateAttemptId) return;
+      if (!isActiveSession() || attemptId !== candidateAttemptId) return;
       // iOS/iPadOS can reject autoplay-style play() after async work even though
       // the source is valid; do not treat that as a fatal playback candidate error.
       if (
@@ -1584,9 +1610,11 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
   };
 
   mvideo.onerror = () => {
+    if (!isActiveSession()) return;
     advanceCandidate();
   };
   revealTimer = setTimeout(() => {
+    if (!isActiveSession()) return;
     revealPlayer();
   }, 8000);
 
@@ -1632,6 +1660,7 @@ function relayoutModalBox() {
   }
 }
 function closePlayer() {
+  playerSessionId += 1;
   try {
     mvideo.pause();
   } catch (e) {}
@@ -1723,6 +1752,9 @@ mvideo.addEventListener("ended", playNextInSlideshow);
 modal.addEventListener("click", (e) => {
   if (e.target === modal) closePlayer();
 });
+if (preloadOverlay) {
+  preloadOverlay.addEventListener("click", closePlayer);
+}
 pcancel.addEventListener("click", closePassModal);
 eok.addEventListener("click", closeErrorModal);
 emodal.addEventListener("click", (e) => {
