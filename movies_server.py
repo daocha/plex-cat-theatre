@@ -1186,7 +1186,7 @@ class App:
             private_passcode=cfg.get("private_passcode", ""),
             transcode_enabled=cfg.get("transcode", True),
             verify_passcode_fn=verify_passcode,
-            generate_thumbs=not plex_enabled,
+            generate_thumbs=True,
             scan_checkpoint_cb=(
                 (lambda scanning: schedule_plex_overlay_refresh(
                     persist_index=not scanning,

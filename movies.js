@@ -265,9 +265,9 @@ function handlePinchEnd(event) {
 function getMobileZoomRowLimit() {
   const landscape = window.matchMedia("(orientation: landscape)").matches;
   if (isIPadClient()) {
-    return landscape ? 6 : 4;
+    return landscape ? 7 : 5;
   }
-  return landscape ? 6 : 3;
+  return landscape ? 7 : 3;
 }
 
 function persistMobileZoomLevel(level) {
@@ -1852,10 +1852,8 @@ function updateMobileCols() {
   const coarse = window.matchMedia("(pointer: coarse)").matches;
   const landscape = window.matchMedia("(orientation: landscape)").matches;
   let cols = 4;
-  if (coarse && landscape && isIPadClient() && window.innerWidth >= 900)
-    cols = 8;
-  else if (coarse && !landscape && isIPadClient()) cols = 6;
-  else if (coarse && landscape) cols = 6;
+  if (isIPadClient()) cols = landscape ? 8 : 6;
+  else if (coarse && landscape) cols = 8;
   currentMobileCols = cols;
   applyMobileColumnSetting();
   return cols;
@@ -2627,6 +2625,11 @@ const relayoutNow = () => {
 };
 window.addEventListener("resize", () => {
   const coarse = window.matchMedia("(pointer: coarse)").matches;
+  if (isIPadClient() && mobileZoomLevel <= 1) {
+    updateMobileCols();
+    relayoutModalBox();
+    return;
+  }
   const landscape = window.matchMedia("(orientation: landscape)").matches;
   const w = window.innerWidth;
   const widthDelta = Math.abs(w - lastResizeW);
@@ -2644,6 +2647,11 @@ window.addEventListener("resize", () => {
   }, 140);
 });
 window.addEventListener("orientationchange", () => {
+  if (isIPadClient() && mobileZoomLevel <= 1) {
+    updateMobileCols();
+    relayoutModalBox();
+    return;
+  }
   const prevCols = currentMobileCols;
   const nextCols = updateMobileCols();
   if (prevCols !== nextCols) {
@@ -2659,6 +2667,10 @@ if (window.visualViewport && window.visualViewport.addEventListener) {
   window.visualViewport.addEventListener("resize", () => {
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     if (!coarse) return;
+    if (isIPadClient() && mobileZoomLevel <= 1) {
+      updateMobileCols();
+      return;
+    }
     const prevCols = currentMobileCols;
     const nextCols = updateMobileCols();
     if (prevCols !== nextCols) {
@@ -2713,7 +2725,7 @@ document.getElementById("privateToggle").addEventListener("click", async () => {
 
 // Force-disable zoom on all devices/browsers when configured
 let lastTouchEnd = 0;
-const PREVENT_NATIVE_PINCH = false;
+const PREVENT_NATIVE_PINCH = true;
 
 if (PREVENT_NATIVE_PINCH) {
   document.addEventListener("gesturestart", (e) => e.preventDefault(), {
