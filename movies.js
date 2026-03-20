@@ -265,9 +265,9 @@ function handlePinchEnd(event) {
 function getMobileZoomRowLimit() {
   const landscape = window.matchMedia("(orientation: landscape)").matches;
   if (isIPadClient()) {
-    return landscape ? 6 : 4;
+    return landscape ? 7 : 5;
   }
-  return landscape ? 6 : 3;
+  return landscape ? 7 : 3;
 }
 
 function persistMobileZoomLevel(level) {
@@ -1273,8 +1273,14 @@ const pmodal = document.getElementById("pmodal"),
   pcancel = document.getElementById("pcancel"),
   pok = document.getElementById("pok");
 const emodal = document.getElementById("emodal"),
+  etitle = document.getElementById("etitle"),
   emsg = document.getElementById("emsg"),
   eok = document.getElementById("eok");
+const scanModal = document.getElementById("scanModal"),
+  scanRescan = document.getElementById("scanRescan"),
+  scanFull = document.getElementById("scanFull"),
+  scanRefreshDb = document.getElementById("scanRefreshDb"),
+  scanCancel = document.getElementById("scanCancel");
 let currentSubtitleUrl = null;
 let subtitleEnabled = false;
 let currentSubtitleTrack = null;
@@ -1397,6 +1403,12 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
       mvideo.src = fallbackVideoUrl || "";
       return;
     }
+    const preflight = await preflightPlaybackUrl(url);
+    if (!isActiveSession()) return;
+    if (isPlayback404Response(preflight)) {
+      handlePlayback404();
+      return;
+    }
     if (String(url || "").includes(".m3u8")) {
       const useNative = isIOSLike() && mvideo.canPlayType("application/vnd.apple.mpegurl");
       if (useNative) {
@@ -1422,6 +1434,17 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
           });
           hlsPlayer.on(Hls.Events.ERROR, (ev, data) => {
             if (!data || !data.fatal) return;
+            const responseCode = Number(
+              data?.response?.code || data?.response?.status || 0,
+            );
+            if (responseCode === 404) {
+              try {
+                hlsPlayer.destroy();
+              } catch (e) {}
+              hlsPlayer = null;
+              handlePlayback404();
+              return;
+            }
             if (
               data.type === Hls.ErrorTypes.NETWORK_ERROR &&
               recoverCount < 2
@@ -1581,6 +1604,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     clearCandidateFallbackTimer();
     await startPlayback(next);
     if (!isActiveSession() || attemptId !== candidateAttemptId) return;
+    if (playerSessionId !== sessionId) return;
     if (!subtitleAttachStarted) {
       subtitleAttachStarted = true;
       attachSubtitleTrack();
@@ -1611,6 +1635,10 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
 
   mvideo.onerror = () => {
     if (!isActiveSession()) return;
+    if (mvideo.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+      handlePlayback404();
+      return;
+    }
     advanceCandidate();
   };
   revealTimer = setTimeout(() => {
@@ -1735,12 +1763,34 @@ function openPassModal() {
 function closePassModal() {
   pmodal.classList.remove("on");
 }
-function showErrorModal(msg) {
+function showErrorModal(msg, title = "Error") {
+  if (etitle) etitle.textContent = title;
   emsg.textContent = msg || "發生錯誤";
   emodal.classList.add("on");
 }
 function closeErrorModal() {
   emodal.classList.remove("on");
+}
+function openScanModal() {
+  if (!scanModal) return;
+  scanModal.classList.add("on");
+  setTimeout(() => scanRescan?.focus(), 30);
+}
+function closeScanModal() {
+  if (!scanModal) return;
+  scanModal.classList.remove("on");
+}
+async function performScanAction(mode) {
+  closeScanModal();
+  if (mode === "refresh-db") {
+    await cacheClearAll().catch(() => {});
+    await load(true);
+    return;
+  }
+  const url = mode === "full" ? withBase("rescan?full=1") : withBase("rescan");
+  await fetch(url, { headers: deviceHeaders() });
+  await cacheClearAll().catch(() => {});
+  setTimeout(() => load(true), 800);
 }
 mclose.addEventListener("click", closePlayer);
 mss.addEventListener("click", () => {
@@ -1776,7 +1826,7 @@ pok.addEventListener("click", async () => {
     ok = !!r.ok;
   } catch (e) {}
   if (!ok) {
-    showErrorModal("Wrong passcode");
+    showErrorModal("Wrong passcode", "Authentication failed");
     return;
   }
   setPrivateMode(true);
@@ -1807,8 +1857,22 @@ ppass.addEventListener("keydown", async (e) => {
 pmodal.addEventListener("click", (e) => {
   if (e.target === pmodal) closePassModal();
 });
+scanCancel?.addEventListener("click", closeScanModal);
+scanRescan?.addEventListener("click", async () => {
+  await performScanAction("rescan");
+});
+scanFull?.addEventListener("click", async () => {
+  await performScanAction("full");
+});
+scanRefreshDb?.addEventListener("click", async () => {
+  await performScanAction("refresh-db");
+});
+scanModal?.addEventListener("click", (e) => {
+  if (e.target === scanModal) closeScanModal();
+});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && modal.classList.contains("on")) closePlayer();
+  if (e.key === "Escape" && scanModal?.classList.contains("on")) closeScanModal();
 });
 const aspectMap = {};
 let relayoutTimer = null;
@@ -1852,10 +1916,8 @@ function updateMobileCols() {
   const coarse = window.matchMedia("(pointer: coarse)").matches;
   const landscape = window.matchMedia("(orientation: landscape)").matches;
   let cols = 4;
-  if (coarse && landscape && isIPadClient() && window.innerWidth >= 900)
-    cols = 8;
-  else if (coarse && !landscape && isIPadClient()) cols = 6;
-  else if (coarse && landscape) cols = 6;
+  if (isIPadClient()) cols = landscape ? 8 : 6;
+  else if (coarse && landscape) cols = 8;
   currentMobileCols = cols;
   applyMobileColumnSetting();
   return cols;
@@ -2023,17 +2085,69 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function inferFileExtension(video) {
+  const candidates = [
+    String(video?.relative_path || ""),
+    String(video?.name || ""),
+    String(video?.video_url || ""),
+    String(video?.stream_url || ""),
+  ];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const clean = raw.split(/[?#]/, 1)[0];
+    const match = clean.match(/\.([a-z0-9]{2,5})$/i);
+    if (match) return match[1].toLowerCase();
+  }
+  return "";
+}
+
+function buildCardNameTitle(video) {
+  const name = String(video?.name || "");
+  const ext = inferFileExtension(video);
+  if (!ext) return name;
+  if (name.toLowerCase().endsWith(`.${ext}`)) return name;
+  return `${name}.${ext}`;
+}
+
+function isPlayback404Response(response) {
+  return !!response && Number(response.status || 0) === 404;
+}
+
+async function preflightPlaybackUrl(url) {
+  const target = String(url || "").trim();
+  if (!target) return { ok: false, status: 0 };
+  try {
+    const response = await fetch(target, {
+      method: "HEAD",
+      headers: deviceHeaders(),
+      cache: "no-store",
+    });
+    return { ok: response.ok, status: Number(response.status || 0) };
+  } catch (e) {
+    return { ok: true, status: 0 };
+  }
+}
+
+function handlePlayback404() {
+  closePlayer();
+  showErrorModal(
+    "File not found. The drive may be unmounted or sleeping. Please retry.",
+    "Playback failed",
+  );
+}
+
 function cardHtml(v, w, h, opts = {}) {
   const { useFlex = false, flexFactor = 1 } = opts;
   const minCardWidth = mobileZoomLevel > 1 ? 90 : 120;
   const cw = Math.max(minCardWidth, Math.round(w));
   const safeName = escapeHtml(v.name);
+  const safeNameTitle = escapeHtml(buildCardNameTitle(v));
   const safeFolder = escapeHtml(v.folder);
   const safeSize = escapeHtml(v.size);
   const style = useFlex
     ? `flex:${flexFactor} 0 0;height:${Math.round(h)}px;`
     : `width:${cw}px;`;
-  return `<article class='card' style='${style}' data-rowh='${Math.round(h)}' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}' style='height:${Math.round(h)}px'/><div class='meta'><div class='name' title='${safeName}' data-fullname='${safeName}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='播放' title='播放'>▶</button></div></div></article>`;
+  return `<article class='card' style='${style}' data-rowh='${Math.round(h)}' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}' style='height:${Math.round(h)}px'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='播放' title='播放'>▶</button></div></div></article>`;
 }
 
 function buildRows(items, { append = false, isFinal = false } = {}) {
@@ -2058,9 +2172,10 @@ function buildRows(items, { append = false, isFinal = false } = {}) {
     wrap.innerHTML = items
       .map((v) => {
         const safeName = escapeHtml(v.name);
+        const safeNameTitle = escapeHtml(buildCardNameTitle(v));
         const safeFolder = escapeHtml(v.folder);
         const safeSize = escapeHtml(v.size);
-        return `<article class='card' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}'/><div class='meta'><div class='name' title='${safeName}' data-fullname='${safeName}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='播放' title='播放'>▶</button></div></div></article>`;
+        return `<article class='card' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='播放' title='播放'>▶</button></div></div></article>`;
       })
       .join("");
     bindCardEvents(wrap);
@@ -2627,6 +2742,11 @@ const relayoutNow = () => {
 };
 window.addEventListener("resize", () => {
   const coarse = window.matchMedia("(pointer: coarse)").matches;
+  if (isIPadClient() && mobileZoomLevel <= 1) {
+    updateMobileCols();
+    relayoutModalBox();
+    return;
+  }
   const landscape = window.matchMedia("(orientation: landscape)").matches;
   const w = window.innerWidth;
   const widthDelta = Math.abs(w - lastResizeW);
@@ -2644,6 +2764,11 @@ window.addEventListener("resize", () => {
   }, 140);
 });
 window.addEventListener("orientationchange", () => {
+  if (isIPadClient() && mobileZoomLevel <= 1) {
+    updateMobileCols();
+    relayoutModalBox();
+    return;
+  }
   const prevCols = currentMobileCols;
   const nextCols = updateMobileCols();
   if (prevCols !== nextCols) {
@@ -2659,6 +2784,10 @@ if (window.visualViewport && window.visualViewport.addEventListener) {
   window.visualViewport.addEventListener("resize", () => {
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     if (!coarse) return;
+    if (isIPadClient() && mobileZoomLevel <= 1) {
+      updateMobileCols();
+      return;
+    }
     const prevCols = currentMobileCols;
     const nextCols = updateMobileCols();
     if (prevCols !== nextCols) {
@@ -2680,11 +2809,7 @@ if ("IntersectionObserver" in window && scrollSentinel) {
   );
   io.observe(scrollSentinel);
 }
-document.getElementById("rescan").addEventListener("click", async () => {
-  await fetch(withBase("rescan"), { headers: deviceHeaders() });
-  await cacheClearAll().catch(() => {});
-  setTimeout(() => load(true), 800);
-});
+document.getElementById("rescan").addEventListener("click", openScanModal);
 document.getElementById("privateToggle").addEventListener("click", async () => {
   const authorized = !!(catalogStatus && catalogStatus.private_authorized);
   if (authorized) {
@@ -2713,7 +2838,7 @@ document.getElementById("privateToggle").addEventListener("click", async () => {
 
 // Force-disable zoom on all devices/browsers when configured
 let lastTouchEnd = 0;
-const PREVENT_NATIVE_PINCH = false;
+const PREVENT_NATIVE_PINCH = true;
 
 if (PREVENT_NATIVE_PINCH) {
   document.addEventListener("gesturestart", (e) => e.preventDefault(), {

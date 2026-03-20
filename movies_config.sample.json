@@ -8,6 +8,7 @@
   "thumbs_dir": "./cache/thumbnails",
   "http_port": 9245,
   "https_port": 9245,
+  "mount_script": "",
   "private_folder": [
     "Private"
   ],

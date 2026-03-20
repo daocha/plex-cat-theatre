@@ -147,6 +147,7 @@ class Catalog:
                 "root_index": 0,
                 "root_name": "",
                 "root_path": "",
+                "traversed_entries": 0,
                 "processed_entries": 0,
                 "videos_found": 0,
                 "new_count": 0,
@@ -201,9 +202,27 @@ class Catalog:
             private_ids_local = {
                 item["id"] for item in videos_sorted if self._is_private_video(item)
             }
+            with self._lock:
+                latest_video_map = dict(self.video_map)
+                latest_file_meta = dict(self._file_meta_cache)
+                latest_subtitle_map = dict(self.subtitle_map)
             payload = []
             for video in videos_sorted:
                 item = dict(video)
+                video_id = str(item.get("id", "")).strip()
+                video_path = latest_video_map.get(video_id) or vmap.get(video_id)
+                if video_path:
+                    file_meta = latest_file_meta.get(str(video_path), {})
+                    latest_aspect = float(file_meta.get("ar", 0) or 0)
+                    if latest_aspect > 0:
+                        item["ar"] = latest_aspect
+                    item["audio_codecs"] = list(file_meta.get("audio_codecs", []))
+                subtitle_path = latest_subtitle_map.get(video_id) or smap.get(video_id)
+                item["subtitle_url"] = (
+                    f"/subtitle/{video_id}.vtt"
+                    if subtitle_path and Path(subtitle_path).exists()
+                    else ""
+                )
                 item.pop("mtime", None)
                 payload.append(item)
 
@@ -267,6 +286,35 @@ class Catalog:
                     self.scan_checkpoint_cb(scanning=scanning)
                 except Exception as exc:
                     logging.debug("Scan checkpoint callback failed: %s", exc)
+
+        def wait_for_metadata_idle(timeout: float = 120.0):
+            deadline = time.time() + max(0.0, timeout)
+            last_log_at = 0.0
+            while time.time() < deadline:
+                with self._lock:
+                    pending = len(self._metadata_queue)
+                    inflight = len(self._metadata_inflight)
+                if pending == 0 and inflight == 0:
+                    return True
+                now_ts = time.time()
+                if now_ts - last_log_at >= 2.0:
+                    logging.info(
+                        "Waiting for metadata worker before final snapshot: pending=%d inflight=%d",
+                        pending,
+                        inflight,
+                    )
+                    last_log_at = now_ts
+                time.sleep(0.1)
+            with self._lock:
+                pending = len(self._metadata_queue)
+                inflight = len(self._metadata_inflight)
+            logging.warning(
+                "Metadata worker did not drain before final snapshot timeout: pending=%d inflight=%d timeout=%.1fs",
+                pending,
+                inflight,
+                timeout,
+            )
+            return False
 
         def remove_root_from_accumulator(root_label: str):
             prefix = f"{root_label}/"
@@ -368,6 +416,7 @@ class Catalog:
                         "root_index": root_index,
                         "root_name": root_label,
                         "root_path": str(root),
+                        "traversed_entries": 0,
                         "processed_entries": 0,
                         "videos_found": 0,
                         "new_count": 0,
@@ -393,17 +442,58 @@ class Catalog:
             remove_root_from_accumulator(root_label)
             seen_ids: set[str] = set()
             last_progress_log_at = 0.0
+            traversed_entries = 0
 
+            candidate_suffixes = set(VIDEO_EXTENSIONS) | set(SOURCE_EXTENSIONS)
             for dirpath, _, filenames in os.walk(root):
+                self._update_scan_progress(
+                    phase="scanning",
+                    root_index=root_index,
+                    root_name=root_label,
+                    root_path=str(root),
+                    traversed_entries=traversed_entries,
+                    processed_entries=processed_entries,
+                    videos_found=root_video_count,
+                    new_count=new_count,
+                    changed_count=changed_count,
+                    unchanged_count=unchanged_count,
+                    thumbs_pending=missing_thumb_count,
+                    previews_pending=missing_preview_count,
+                    metadata_pending=len(self._metadata_queue),
+                    current_path=str(dirpath),
+                    current_stage="walking",
+                )
                 for filename in filenames:
-                    processed_entries += 1
+                    traversed_entries += 1
                     path = Path(dirpath) / filename
                     suffix = path.suffix.lower()
+                    if suffix not in candidate_suffixes:
+                        if traversed_entries % 500 == 0:
+                            self._update_scan_progress(
+                                phase="scanning",
+                                root_index=root_index,
+                                root_name=root_label,
+                                root_path=str(root),
+                                traversed_entries=traversed_entries,
+                                processed_entries=processed_entries,
+                                videos_found=root_video_count,
+                                new_count=new_count,
+                                changed_count=changed_count,
+                                unchanged_count=unchanged_count,
+                                thumbs_pending=missing_thumb_count,
+                                previews_pending=missing_preview_count,
+                                metadata_pending=len(self._metadata_queue),
+                                current_path=str(path),
+                                current_stage="walking",
+                            )
+                        continue
+                    processed_entries += 1
                     self._update_scan_progress(
                         phase="scanning",
                         root_index=root_index,
                         root_name=root_label,
                         root_path=str(root),
+                        traversed_entries=traversed_entries,
                         processed_entries=processed_entries,
                         videos_found=root_video_count,
                         new_count=new_count,
@@ -426,11 +516,6 @@ class Catalog:
                                     path,
                                 )
                             continue
-                    if suffix not in VIDEO_EXTENSIONS and not (
-                        suffix in SOURCE_EXTENSIONS and not self.transcode_enabled
-                    ):
-                        continue
-
                     stat = path.stat()
                     video_id = vid_id(path)
                     seen_ids.add(video_id)
@@ -603,6 +688,7 @@ class Catalog:
                 self.scan_progress.update(
                     {
                         "updated_at": time.time(),
+                        "traversed_entries": traversed_entries,
                         "processed_entries": processed_entries,
                         "videos_found": root_video_count,
                         "new_count": new_count,
@@ -624,6 +710,7 @@ class Catalog:
             )
             commit_snapshot(scanning=True, persist_progress=True)
 
+        wait_for_metadata_idle()
         commit_snapshot(scanning=False)
         logging.info(
             "Full scan complete: roots=%d total_videos=%d elapsed=%.1fs",
@@ -849,6 +936,7 @@ class Catalog:
                         "subtitle_url": video.get("subtitle_url", ""),
                         "plex_stream_url": video.get("plex_stream_url", ""),
                         "preview_urls": video.get("preview_urls", []),
+                        "audio_codecs": list(video.get("audio_codecs", [])),
                         "thumb_ready": bool(file_meta.get("thumb_ready", False)),
                         "preview_ready": bool(file_meta.get("preview_ready", False)),
                         "subtitle_ready": bool(file_meta.get("subtitle_ready", False)),
@@ -902,19 +990,33 @@ class Catalog:
                 return
             file_key = str(video_path)
             meta = dict(self._file_meta_cache.get(file_key, {}))
+            changed = False
             if aspect and aspect > 0:
-                meta["ar"] = float(aspect)
+                normalized_aspect = float(aspect)
+                if float(meta.get("ar", 0) or 0) != normalized_aspect:
+                    changed = True
+                meta["ar"] = normalized_aspect
             if subtitle_path and subtitle_path.exists():
-                meta["subtitle_path"] = str(subtitle_path)
+                subtitle_value = str(subtitle_path)
+                if meta.get("subtitle_path", "") != subtitle_value or not bool(
+                    meta.get("subtitle_ready", False)
+                ):
+                    changed = True
+                meta["subtitle_path"] = subtitle_value
                 meta["subtitle_ready"] = True
                 self.subtitle_map[video_id] = subtitle_path
             else:
+                if meta.get("subtitle_path", "") or bool(meta.get("subtitle_ready", False)):
+                    changed = True
                 meta["subtitle_path"] = ""
                 meta["subtitle_ready"] = False
                 self.subtitle_map.pop(video_id, None)
             if audio_codecs is not None:
-                meta["audio_codecs"] = list(audio_codecs)
-                self._audio_codec_cache[file_key] = list(audio_codecs)
+                normalized_audio_codecs = list(audio_codecs)
+                if list(meta.get("audio_codecs", [])) != normalized_audio_codecs:
+                    changed = True
+                meta["audio_codecs"] = normalized_audio_codecs
+                self._audio_codec_cache[file_key] = normalized_audio_codecs
             self._file_meta_cache[file_key] = meta
             subtitle_url = f"/subtitle/{video_id}.vtt" if subtitle_path and subtitle_path.exists() else ""
             for collection in (self._videos, self._public_videos):
@@ -928,10 +1030,9 @@ class Catalog:
                         video["audio_codecs"] = list(audio_codecs)
                     break
             scanning = self.is_scanning
-        now_ts = time.time()
-        if (not scanning) and (now_ts - self._last_index_persist_at >= 15):
+        if (not scanning) and changed:
             self._save_index(INDEX_STATE_PATH)
-            self._last_index_persist_at = now_ts
+            self._last_index_persist_at = time.time()
 
     def _probe_video_metadata(self, video_id: str):
         with self._lock:
