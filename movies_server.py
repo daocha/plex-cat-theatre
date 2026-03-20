@@ -74,6 +74,8 @@ cfg_runtime = {
     "direct_audio_whitelist": {"aac", "mp3"},
     "debug_enabled": False,
     "mount_script": "",
+    "plex_enabled": False,
+    "plex_base_url": "",
 }
 APPROVED_PRIVATE_DEVICES: set[str] = set()
 PRIVATE_STATE_LOCK = threading.Lock()
@@ -617,6 +619,8 @@ def api_config():
                 cfg_runtime.get("direct_playback_enabled", True)
             ),
             "direct_audio_whitelist": sorted(whitelist),
+            "plex_enabled": bool(cfg_runtime.get("plex_enabled", False)),
+            "plex_base_url": str(cfg_runtime.get("plex_base_url", "") or "").strip(),
         }
     )
 
@@ -864,7 +868,19 @@ def plex_poster(vid):
         plex_adapter.bind_catalog(catalog.video_map)
     except Exception:
         pass
-    resp, err = plex_adapter.proxy_binary_by_kind(urllib.parse.unquote(vid), "poster")
+    try:
+        req_w = int(request.args.get("w", "360") or 360)
+    except Exception:
+        req_w = 360
+    try:
+        req_h = int(request.args.get("h", "540") or 540)
+    except Exception:
+        req_h = 540
+    resp, err = plex_adapter.proxy_resized_poster(
+        urllib.parse.unquote(vid),
+        req_w,
+        req_h,
+    )
     if not resp:
         return thumb_placeholder()
     try:
@@ -1306,6 +1322,8 @@ class App:
         }
         cfg_runtime["debug_enabled"] = bool(cfg.get("debug_enabled", False))
         cfg_runtime["mount_script"] = str(cfg.get("mount_script", "") or "").strip()
+        cfg_runtime["plex_enabled"] = plex_enabled
+        cfg_runtime["plex_base_url"] = str(plex_cfg.get("base_url", "") or "").strip()
         plex_adapter = PlexAdapter(
             enabled=plex_enabled,
             plex_cfg=plex_cfg,
