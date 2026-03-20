@@ -40,6 +40,7 @@ const BASE_PATH = getBasePath();
 let manualPlaybackMode = null;
 let currentPlaybackMode = null;
 let plexButton = null;
+let plexHomeLink = null;
 const PLAYBACK_OVERRIDE_PREFIX = "playback-override:";
 let skipManualOverrideLoad = false;
 
@@ -126,6 +127,85 @@ function withBase(path) {
   const clean = raw.replace(/^\/+/, "");
   return BASE_PATH ? `${BASE_PATH}/${clean}` : `/${clean}`;
 }
+
+const PLEX_POSTER_MAX_WIDTH = 640;
+const PLEX_POSTER_MAX_HEIGHT = 960;
+const PLEX_POSTER_MIN_WIDTH = 80;
+const PLEX_POSTER_MIN_HEIGHT = 120;
+const PLEX_POSTER_MAX_DPR = 2;
+const ANDROID_PLEX_POSTER_SCALE = 1.3;
+const IOS_PLEX_POSTER_SCALE = 1.15;
+const MOBILE_WARMUP_DELAY_MS = 900;
+
+function isPlexPosterUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw, window.location.href);
+    return /\/plex\/poster\/.+\.jpg$/i.test(parsed.pathname);
+  } catch (err) {
+    return /\/plex\/poster\/.+\.jpg(?:[?#]|$)/i.test(raw);
+  }
+}
+
+function getPlexPosterScale() {
+  const dpr = Math.max(
+    1,
+    Math.min(window.devicePixelRatio || 1, PLEX_POSTER_MAX_DPR),
+  );
+  if (isAndroidClient()) return dpr * ANDROID_PLEX_POSTER_SCALE;
+  if (isIOSLike()) return dpr * IOS_PLEX_POSTER_SCALE;
+  return 1;
+}
+
+function buildSizedPlexPosterUrl(url, width, height) {
+  if (!isPlexPosterUrl(url)) return String(url || "").trim();
+  const cssWidth = Math.max(0, Number(width) || 0);
+  const cssHeight = Math.max(0, Number(height) || 0);
+  const scale = getPlexPosterScale();
+  const reqWidth = Math.max(
+    PLEX_POSTER_MIN_WIDTH,
+    Math.min(PLEX_POSTER_MAX_WIDTH, Math.ceil(cssWidth * scale)),
+  );
+  const reqHeight = Math.max(
+    PLEX_POSTER_MIN_HEIGHT,
+    Math.min(PLEX_POSTER_MAX_HEIGHT, Math.ceil(cssHeight * scale)),
+  );
+  try {
+    const parsed = new URL(url, window.location.href);
+    parsed.searchParams.set("w", String(reqWidth));
+    parsed.searchParams.set("h", String(reqHeight));
+    return `${parsed.pathname}?${parsed.searchParams.toString()}`;
+  } catch (err) {
+    const [basePart, queryPart = ""] = String(url || "").trim().split("?", 2);
+    const search = new URLSearchParams(queryPart);
+    search.set("w", String(reqWidth));
+    search.set("h", String(reqHeight));
+    return `${basePart}?${search.toString()}`;
+  }
+}
+
+function shouldSkipPlexPosterSizing(img) {
+  if (!(img instanceof HTMLImageElement)) return true;
+  if (isIPadClient()) return true;
+  if (!isAndroidClient()) return false;
+  if (getAndroidZoomTransitionMode() === "head") return true;
+  return img.dataset.plexSizedLocked === "1";
+}
+
+function syncPlexPosterSizing(img) {
+  if (shouldSkipPlexPosterSizing(img)) return;
+  const currentSrc = String(img.getAttribute("src") || "").trim();
+  if (!isPlexPosterUrl(currentSrc)) return;
+  const rect = img.getBoundingClientRect();
+  if (!(rect.width > 0) || !(rect.height > 0)) return;
+  const next = buildSizedPlexPosterUrl(currentSrc, rect.width, rect.height);
+  if (!next || next === currentSrc || img.dataset.sizedSrc === next) return;
+  img.dataset.sizedSrc = next;
+  if (isAndroidClient()) img.dataset.plexSizedLocked = "1";
+  img.src = next;
+}
+
 function apiUrl(path) {
   const clean = String(path || "").replace(/^\/+/, "");
   return BASE_PATH ? `${BASE_PATH}/api/${clean}` : `/api/${clean}`;
@@ -135,6 +215,9 @@ function isDesktopClient() {
   const isiOS = /iphone|ipad|ipod/.test(ua);
   const isAndroid = /android/.test(ua);
   return !(isiOS || isAndroid);
+}
+function isAndroidClient() {
+  return /android/.test((navigator.userAgent || "").toLowerCase());
 }
 function isIOSLike() {
   const ua = (navigator.userAgent || "").toLowerCase();
@@ -157,6 +240,7 @@ function isIPadClient() {
 }
 
 const MOBILE_ZOOM_STORAGE_KEY = "movies_mobile_zoom_level";
+const ANDROID_ZOOM_TRANSITION_KEY = "movies_android_zoom_transition";
 function readPersistedMobileZoomLevel() {
   try {
     const stored = Number(localStorage.getItem(MOBILE_ZOOM_STORAGE_KEY));
@@ -298,16 +382,20 @@ function setMobileZoomLevel(level, { durationMs = null } = {}) {
       isFinal: renderCount >= filteredVideos.length && serverExhausted,
     });
   };
-  animateMobileZoomTransition(applyZoom, { durationMs, zoomingIn });
+  return animateMobileZoomTransition(applyZoom, { durationMs, zoomingIn });
 }
 
 function getVisibleGridCardRects() {
   const rects = new Map();
   if (!grid) return rects;
+  const viewportTop = -window.innerHeight * 2.5;
+  const viewportBottom = window.innerHeight * 2.5;
   grid.querySelectorAll(".card[data-id]").forEach((card) => {
     const id = card.dataset.id;
     if (!id) return;
-    rects.set(id, card.getBoundingClientRect());
+    const rect = card.getBoundingClientRect();
+    if (rect.bottom < viewportTop || rect.top > viewportBottom) return;
+    rects.set(id, rect);
   });
   return rects;
 }
@@ -336,8 +424,26 @@ function getMobileZoomAnchor() {
 }
 
 function getMobileZoomTransitionDuration(zoomingIn, durationMs) {
+  if (durationMs != null) {
+    const scaled = Math.round(durationMs * 1.5);
+    return Math.max(280, Math.min(750, scaled));
+  }
+  return 750;
+}
+
+function getHeadZoomTransitionDuration(zoomingIn, durationMs) {
   if (durationMs != null) return Math.max(120, Math.min(480, durationMs));
   return zoomingIn ? 280 : 220;
+}
+
+function getAndroidZoomTransitionMode() {
+  if (!isAndroidClient()) return "snapshot";
+  try {
+    const stored = localStorage.getItem(ANDROID_ZOOM_TRANSITION_KEY);
+    return stored === "head" ? "head" : "snapshot";
+  } catch (err) {
+    return "snapshot";
+  }
 }
 
 function restoreAnchorAfterZoom(anchor) {
@@ -395,6 +501,126 @@ function cleanupZoomCardTransforms(cards) {
   });
 }
 
+function createZoomSnapshotLayer(cards, rects) {
+  if (!cards?.length) return null;
+  const layer = document.createElement("div");
+  layer.className = "zoom-snapshot-layer";
+  cards.forEach((card) => {
+    const rect = rects.get(card.dataset.id);
+    if (!rect || !rect.width || !rect.height) return;
+    const clone = card.cloneNode(true);
+    clone.classList.add("zoom-snapshot-card");
+    clone.querySelectorAll(".meta").forEach((node) => node.remove());
+    const sourceImg = card.querySelector("img");
+    const cloneImg = clone.querySelector("img");
+    if (sourceImg && cloneImg) {
+      cloneImg.loading = "eager";
+      cloneImg.decoding = "sync";
+      const liveSrc = sourceImg.currentSrc || sourceImg.src || sourceImg.getAttribute("src") || "";
+      if (liveSrc) cloneImg.src = liveSrc;
+      const computed = window.getComputedStyle(sourceImg);
+      cloneImg.style.objectFit = computed.objectFit || "cover";
+      cloneImg.style.objectPosition = computed.objectPosition || "center center";
+    }
+    const cardStyle = window.getComputedStyle(card);
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.left = `${rect.left}px`;
+    clone.style.top = `${rect.top}px`;
+    clone.style.borderRadius = cardStyle.borderRadius || "0px";
+    layer.appendChild(clone);
+  });
+  document.body.appendChild(layer);
+  return layer;
+}
+
+function destroyZoomSnapshotLayer(layer) {
+  if (!layer) return;
+  try {
+    if (layer.parentNode) layer.parentNode.removeChild(layer);
+  } catch (e) {}
+}
+
+function animateHeadStyleZoomTransition(work, before, anchor, zoomingIn, durationMs) {
+  const transitionMs = getHeadZoomTransitionDuration(zoomingIn, durationMs);
+  work();
+  restoreAnchorAfterZoom(anchor);
+  const cards = Array.from(grid.querySelectorAll(".card[data-id]"));
+  applyInitialZoomCardTransforms(cards, before, zoomingIn);
+  void grid.getBoundingClientRect();
+  zoomFadeOutTimer = window.requestAnimationFrame(() => {
+    zoomFadeOutTimer = null;
+    cards.forEach((card) => {
+      card.style.transition = getMobileZoomTransitionCss(
+        zoomingIn,
+        transitionMs,
+      );
+      card.style.transform = "";
+    });
+    zoomFadeInTimer = window.setTimeout(() => {
+      zoomFadeInTimer = null;
+      cleanupZoomCardTransforms(cards);
+      zoomTransitionActive = false;
+    }, transitionMs);
+  });
+}
+
+function animateSnapshotZoomTransition(work, before, anchor, zoomingIn, durationMs) {
+  grid.classList.add("zoom-transition-live");
+  const transitionMs = getMobileZoomTransitionDuration(zoomingIn, durationMs);
+  const beforeCards = Array.from(grid.querySelectorAll(".card[data-id]")).filter(
+    (card) => before.has(card.dataset.id),
+  );
+  const beforeLayer = createZoomSnapshotLayer(beforeCards, before);
+  work();
+  restoreAnchorAfterZoom(anchor);
+  const after = getVisibleGridCardRects();
+  const afterCards = Array.from(grid.querySelectorAll(".card[data-id]")).filter(
+    (card) => after.has(card.dataset.id),
+  );
+  const afterLayer = createZoomSnapshotLayer(afterCards, after);
+  const easing = zoomingIn
+    ? "cubic-bezier(.22,.7,.2,1)"
+    : "cubic-bezier(.2,.65,.2,1)";
+  const incomingStartScale = zoomingIn ? 0.92 : 1.08;
+  const outgoingEndScale = zoomingIn ? 1.08 : 0.92;
+  grid.style.opacity = "0";
+  if (afterLayer) {
+    afterLayer.style.opacity = "0";
+    afterLayer.style.transformOrigin = "50% 50%";
+    afterLayer.style.transform = `scale(${incomingStartScale})`;
+  }
+  if (beforeLayer) {
+    beforeLayer.style.opacity = "1";
+    beforeLayer.style.transformOrigin = "50% 50%";
+    beforeLayer.style.transform = "scale(1)";
+  }
+  zoomFadeOutTimer = window.requestAnimationFrame(() => {
+    zoomFadeOutTimer = null;
+    if (beforeLayer) {
+      beforeLayer.style.transition = `opacity ${Math.max(150, transitionMs - 30)}ms ease, transform ${transitionMs}ms ${easing}`;
+      beforeLayer.style.opacity = "0";
+      beforeLayer.style.transform = `scale(${outgoingEndScale})`;
+    }
+    if (afterLayer) {
+      afterLayer.style.transition = `opacity ${transitionMs}ms ease, transform ${transitionMs}ms ${easing}`;
+      afterLayer.style.opacity = "1";
+      afterLayer.style.transform = "scale(1)";
+    }
+    zoomFadeInTimer = window.setTimeout(() => {
+      zoomFadeInTimer = null;
+      grid.style.opacity = "1";
+      window.requestAnimationFrame(() => {
+        destroyZoomSnapshotLayer(beforeLayer);
+        destroyZoomSnapshotLayer(afterLayer);
+        grid.style.opacity = "";
+        grid.classList.remove("zoom-transition-live");
+        zoomTransitionActive = false;
+      });
+    }, transitionMs);
+  });
+}
+
 function animateMobileZoomTransition(
   work,
   { zoomingIn = true, durationMs = null } = {},
@@ -416,29 +642,14 @@ function animateMobileZoomTransition(
     zoomFadeInTimer = null;
   }
   zoomTransitionActive = true;
-  const transitionMs = getMobileZoomTransitionDuration(zoomingIn, durationMs);
   const before = getVisibleGridCardRects();
   const anchor = getMobileZoomAnchor();
-  work();
-  restoreAnchorAfterZoom(anchor);
-  const cards = Array.from(grid.querySelectorAll(".card[data-id]"));
-  applyInitialZoomCardTransforms(cards, before, zoomingIn);
-  void grid.getBoundingClientRect();
-  zoomFadeOutTimer = window.requestAnimationFrame(() => {
-    zoomFadeOutTimer = null;
-    cards.forEach((card) => {
-      card.style.transition = getMobileZoomTransitionCss(
-        zoomingIn,
-        transitionMs,
-      );
-      card.style.transform = "";
-    });
-    zoomFadeInTimer = window.setTimeout(() => {
-      zoomFadeInTimer = null;
-      cleanupZoomCardTransforms(cards);
-      zoomTransitionActive = false;
-    }, transitionMs);
-  });
+  const useHeadTransition = isIPadClient() || getAndroidZoomTransitionMode() === "head";
+  if (useHeadTransition) {
+    animateHeadStyleZoomTransition(work, before, anchor, zoomingIn, durationMs);
+    return;
+  }
+  animateSnapshotZoomTransition(work, before, anchor, zoomingIn, durationMs);
 }
 function getPreferredPlaybackMode(v, override = null) {
   if (override === "plex" || override === "direct") return override;
@@ -618,6 +829,7 @@ async function loadServerConfig() {
       const data = await res.json();
       serverConfig = data || {};
       debugEnabled = !!serverConfig.debug_enabled;
+      updatePlexHomeLink();
       updateDebugPanel();
       return serverConfig;
     } catch (err) {
@@ -625,6 +837,19 @@ async function loadServerConfig() {
     }
   })();
   return serverConfigPromise;
+}
+
+function updatePlexHomeLink() {
+  if (!plexHomeLink) return;
+  const enabled = !!serverConfig?.plex_enabled;
+  const href = String(serverConfig?.plex_base_url || "").trim();
+  if (!enabled || !href) {
+    plexHomeLink.style.display = "none";
+    plexHomeLink.removeAttribute("href");
+    return;
+  }
+  plexHomeLink.href = href;
+  plexHomeLink.style.display = "";
 }
 
 let debugDragActive = false;
@@ -1989,6 +2214,12 @@ function bindCardEvents(scope) {
     };
     if (img.complete) setTimeout(syncAspect, 0);
     else img.addEventListener("load", syncAspect, { once: true });
+    requestAnimationFrame(() => {
+      syncPlexPosterSizing(img);
+    });
+    img.addEventListener("load", () => {
+      syncPlexPosterSizing(img);
+    });
     const getVideo = () => {
       if (!card) return null;
       return videos.find((v) => v.id === card.dataset.id) || null;
@@ -2283,6 +2514,7 @@ function queueThumbPrefetch(url) {
 }
 
 function pumpThumbPrefetchQueue() {
+  if (zoomTransitionActive) return;
   while (
     activeThumbPrefetches < MAX_THUMB_PREFETCH_CONCURRENCY &&
     thumbPrefetchQueue.length
@@ -2336,8 +2568,13 @@ function getRenderedRange() {
 
 function scheduleThumbPrefetch() {
   if (thumbPrefetchTimer) clearTimeout(thumbPrefetchTimer);
+  const delay = isMobileLayout() ? 220 : 60;
   thumbPrefetchTimer = setTimeout(() => {
     thumbPrefetchTimer = null;
+    if (zoomTransitionActive) {
+      scheduleThumbPrefetch();
+      return;
+    }
     if (!filteredVideos.length) return;
     const { start, end } = getRenderedRange();
     const movingFast = scrollVelocity > 1200;
@@ -2351,7 +2588,7 @@ function scheduleThumbPrefetch() {
       queueThumbPrefetch(u);
     }
     pumpThumbPrefetchQueue();
-  }, 60);
+  }, delay);
 }
 
 async function preloadAllPages(loadId = activeLoadId) {
@@ -2583,11 +2820,38 @@ async function fetchNextPage(loadId = activeLoadId, opts = {}) {
   }
 }
 
+let catalogWarmupTimer = null;
+
+function clearCatalogWarmupTimer() {
+  if (!catalogWarmupTimer) return;
+  clearTimeout(catalogWarmupTimer);
+  catalogWarmupTimer = null;
+}
+
+function scheduleCatalogWarmup(loadId) {
+  clearCatalogWarmupTimer();
+  const runWarmup = async () => {
+    if (loadId !== activeLoadId) return;
+    await preloadAllPages(loadId);
+    if (loadId !== activeLoadId) return;
+    await saveSnapshotToCache();
+  };
+  if (!isMobileLayout()) {
+    return runWarmup();
+  }
+  catalogWarmupTimer = window.setTimeout(() => {
+    catalogWarmupTimer = null;
+    runWarmup().catch(() => {});
+  }, MOBILE_WARMUP_DELAY_MS);
+  return Promise.resolve();
+}
+
 async function load(forceNetwork = false) {
   if (loadInFlight) return loadInFlight;
   loadInFlight = (async () => {
     activeLoadId += 1;
     const loadId = activeLoadId;
+    clearCatalogWarmupTimer();
     const headers = deviceHeaders();
     await loadServerConfig();
 
@@ -2646,27 +2910,130 @@ async function load(forceNetwork = false) {
       await fetchNextPage(loadId, { render: false });
       renderChunk(true);
       await ensurePrefetchAhead(loadId);
-      // Eagerly load all remaining pages upfront; scrolling does render only.
-      await preloadAllPages(loadId);
-      await saveSnapshotToCache();
       uiReady = true;
+      // Delay heavy warm-up on touch devices so the first interaction after reload stays responsive.
+      await scheduleCatalogWarmup(loadId);
     } finally {
       loadInFlight = null;
     }
   })();
   return loadInFlight;
 }
+const themePicker = document.getElementById("themePicker");
+const themeBtn = document.getElementById("themeBtn");
+const themePanel = document.getElementById("themePanel");
+const themeOptions = document.getElementById("themeOptions");
+plexHomeLink = document.getElementById("plexHomeLink");
+const transitionBlock = document.getElementById("transitionBlock");
+const transitionSnapshotBtn = document.getElementById("transitionSnapshot");
+const transitionHeadBtn = document.getElementById("transitionHead");
 const themeSel = document.getElementById("themeSel");
+const transitionSel = document.getElementById("transitionSel");
 function applyTheme(v) {
   document.body.setAttribute("data-theme", v || "neo-dark");
+}
+function updateThemeButtonLabel() {
+  if (!themeBtn || !themeSel) return;
+  const selected = themeSel.options[themeSel.selectedIndex];
+  themeBtn.textContent = selected?.textContent || "Theme";
+}
+function renderThemeOptions() {
+  if (!themeOptions || !themeSel) return;
+  themeOptions.innerHTML = "";
+  Array.from(themeSel.options).forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "theme-opt";
+    btn.textContent = opt.textContent || opt.value;
+    if (opt.value === themeSel.value) btn.classList.add("active");
+    btn.addEventListener("click", () => {
+      themeSel.value = opt.value;
+      localStorage.setItem("movies_theme", themeSel.value);
+      applyTheme(themeSel.value);
+      updateThemeButtonLabel();
+      renderThemeOptions();
+      themePanel.style.display = "none";
+    });
+    themeOptions.appendChild(btn);
+  });
+}
+function updateAndroidTransitionButtons() {
+  if (!transitionSnapshotBtn || !transitionHeadBtn || !transitionSel) return;
+  const mode = transitionSel.value === "head" ? "head" : "snapshot";
+  transitionSnapshotBtn.classList.toggle("active", mode === "snapshot");
+  transitionHeadBtn.classList.toggle("active", mode === "head");
 }
 themeSel.addEventListener("change", () => {
   localStorage.setItem("movies_theme", themeSel.value);
   applyTheme(themeSel.value);
+  updateThemeButtonLabel();
+  renderThemeOptions();
 });
 const savedTheme = localStorage.getItem("movies_theme") || "neo-dark";
 themeSel.value = savedTheme;
 applyTheme(savedTheme);
+function updateAndroidTransitionControl() {
+  if (!transitionSel || !transitionBlock) return;
+  if (isAndroidClient()) {
+    transitionSel.value = getAndroidZoomTransitionMode();
+    transitionBlock.style.display = "";
+  } else {
+    transitionBlock.style.display = "none";
+  }
+  updateAndroidTransitionButtons();
+}
+function isPanelOpen(panel) {
+  return Boolean(panel && panel.style.display !== "none");
+}
+function setPanelOpen(panel, open) {
+  if (!panel) return;
+  panel.style.display = open ? "block" : "none";
+}
+function closeHeaderPanels() {
+  setPanelOpen(themePanel, false);
+  setPanelOpen(folderPanel, false);
+}
+transitionSel?.addEventListener("change", () => {
+  try {
+    localStorage.setItem(ANDROID_ZOOM_TRANSITION_KEY, transitionSel.value === "head" ? "head" : "snapshot");
+  } catch (err) {}
+  updateAndroidTransitionButtons();
+});
+transitionSnapshotBtn?.addEventListener("click", () => {
+  if (!transitionSel) return;
+  transitionSel.value = "snapshot";
+  transitionSel.dispatchEvent(new Event("change"));
+});
+transitionHeadBtn?.addEventListener("click", () => {
+  if (!transitionSel) return;
+  transitionSel.value = "head";
+  transitionSel.dispatchEvent(new Event("change"));
+});
+themeBtn?.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!themePanel) return;
+  const open = isPanelOpen(themePanel);
+  if (!open) setPanelOpen(folderPanel, false);
+  setPanelOpen(themePanel, !open);
+  if (!open) {
+    renderThemeOptions();
+    updateAndroidTransitionControl();
+  }
+});
+window.addEventListener(
+  "scroll",
+  () => {
+    closeHeaderPanels();
+  },
+  { passive: true },
+);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && isPanelOpen(themePanel)) setPanelOpen(themePanel, false);
+});
+updateThemeButtonLabel();
+renderThemeOptions();
+updateAndroidTransitionControl();
 let searchTimer = null;
 q.addEventListener("input", () => {
   if (!uiReady) return;
@@ -2688,8 +3055,9 @@ folder.addEventListener("change", () => {
 folderBtn.addEventListener("click", (e) => {
   e.preventDefault();
   e.stopPropagation();
-  const open = folderPanel.style.display !== "none";
-  folderPanel.style.display = open ? "none" : "block";
+  const open = isPanelOpen(folderPanel);
+  if (!open) setPanelOpen(themePanel, false);
+  setPanelOpen(folderPanel, !open);
   if (!open) {
     folderSearch.value = "";
     renderFolderOptions();
@@ -2703,13 +3071,20 @@ folderBtn.addEventListener("click", (e) => {
 folderSearch.addEventListener("input", renderFolderOptions);
 const closeFolderPanelIfOutside = (e) => {
   const wrap = document.getElementById("folder");
-  if (!wrap || !folderPanel || folderPanel.style.display === "none") return;
-  if (!wrap.contains(e.target)) folderPanel.style.display = "none";
+  if (!wrap || !isPanelOpen(folderPanel)) return;
+  if (!wrap.contains(e.target)) setPanelOpen(folderPanel, false);
+};
+const closeThemePanelIfOutside = (e) => {
+  if (!themePicker || !isPanelOpen(themePanel)) return;
+  if (!themePicker.contains(e.target)) setPanelOpen(themePanel, false);
 };
 // Use pointer/touch capture so mobile taps outside close the panel immediately.
 document.addEventListener("pointerdown", closeFolderPanelIfOutside, true);
+document.addEventListener("pointerdown", closeThemePanelIfOutside, true);
 document.addEventListener("touchstart", closeFolderPanelIfOutside, true);
+document.addEventListener("touchstart", closeThemePanelIfOutside, true);
 document.addEventListener("click", closeFolderPanelIfOutside, true);
+document.addEventListener("click", closeThemePanelIfOutside, true);
 window.addEventListener("scroll", () => {
   const y = window.scrollY || window.pageYOffset || 0;
   const goingDown = y >= lastScrollY;
