@@ -96,6 +96,18 @@ body[data-theme="sunset-amber"] #toTopBtn{border-color:#8f5f2f;background:#3a241
 .emodal .card{width:min(300px,86vw);background:var(--danger-bg);border:1px solid var(--danger-line);border-radius:14px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.5);text-align:center}
 .emodal .title{font-weight:700;color:var(--danger-title)}
 .emodal .msg{margin-top:8px;opacity:.9;text-align:center}
+.scanmodal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:95}
+.scanmodal.on{display:flex}
+.scanmodal .card{width:min(460px,92vw);background:var(--modal-bg);border:1px solid var(--modal-line);color:var(--fg);border-radius:16px;padding:18px 18px 16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.scanmodal .title{font-size:22px;font-weight:800;letter-spacing:.2px;line-height:1.25}
+.scanmodal .hint{opacity:.8;font-size:13px;line-height:1.45;margin-top:8px}
+.scanmodal .row{display:flex;gap:10px;margin-top:14px}
+.scanmodal .scan-actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px}
+.scanmodal .scan-action-item{display:grid;gap:6px}
+.scanmodal .desc{font-size:12px;line-height:1.35;opacity:.76;padding:0 2px}
+.scanmodal .btn-muted,.scanmodal .btn-primary{width:100%;padding:12px 14px;border-radius:12px;font-weight:700}
+.scanmodal .btn-muted{background:var(--panel2);color:var(--fg);border:1px solid var(--modal-line)}
+.scanmodal .btn-primary{background:var(--accent);color:#fff;border:1px solid transparent}
 h1{margin:0;flex:0 0 auto;display:flex;align-items:center;gap:10px;justify-self:start}
 .brand-logo{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;background:linear-gradient(135deg,var(--logo-a),var(--logo-b));box-shadow:0 4px 12px rgba(0,0,0,.25);color:#fff;font-size:18px;font-weight:700;letter-spacing:.2px}
 .brand-logo::before{content:'🐾'}

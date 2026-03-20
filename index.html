@@ -41,7 +41,13 @@
             <option value="electric-cyan">Electric Cyan</option>
             <option value="sunset-amber">Sunset Amber</option>
           </select>
-          <button id="rescan">Rescan</button>
+          <button
+            id="rescan"
+            type="button"
+            title="Open scan actions: Rescan, Full Scan, or Refresh Database"
+          >
+            Rescan
+          </button>
           <button
             id="privateToggle"
             aria-label="Private mode"
@@ -151,7 +157,7 @@
     </div>
     <div id="emodal" class="emodal" aria-hidden="true">
       <div class="card" role="dialog" aria-modal="true" aria-label="錯誤提示">
-        <div class="title">Authentication failed</div>
+        <div id="etitle" class="title">Authentication failed</div>
         <div id="emsg" class="msg">Passcode 錯誤</div>
         <div class="row" style="margin-top: 12px">
           <button
@@ -164,7 +170,43 @@
         </div>
       </div>
     </div>
+    <div id="scanModal" class="scanmodal" aria-hidden="true">
+      <div
+        class="card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Scan actions"
+      >
+        <div class="title">Scan Actions</div>
+        <div class="hint">
+          Choose what to do with the movie catalog and browser snapshot cache.
+        </div>
+        <div class="scan-actions">
+          <div class="scan-action-item">
+            <button id="scanRescan" class="btn-primary" type="button">
+              Rescan
+            </button>
+            <div class="desc">Quick scan for new or changed files.</div>
+          </div>
+          <div class="scan-action-item">
+            <button id="scanFull" class="btn-primary" type="button">
+              Full Scan
+            </button>
+            <div class="desc">Rebuild scan metadata for the whole library.</div>
+          </div>
+          <div class="scan-action-item">
+            <button id="scanRefreshDb" class="btn-muted" type="button">
+              Refresh Database
+            </button>
+            <div class="desc">Clear browser cache and reload from server.</div>
+          </div>
+        </div>
+        <div class="row">
+          <button id="scanCancel" class="btn-muted" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-    <script src="movies.min.js?v=20260318-1958"></script>
+    <script src="movies.js?v=20260321-0205"></script>
   </body>
 </html>
