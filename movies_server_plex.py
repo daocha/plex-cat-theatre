@@ -240,7 +240,7 @@ class PlexAdapter:
         item["plex_stream_url"] = f"/plex/video/{video_id}.m3u8"
 
         if p.get("thumb"):
-            item["thumb_url"] = f"/plex/poster/{video_id}.jpg"
+            item["thumb_url"] = f"/plex/poster/{video_id}.jpg?w=360&h=540"
             poster_ar = float(p.get("poster_ar") or 0.0)
             if poster_ar > 0:
                 item["ar"] = poster_ar
@@ -417,3 +417,30 @@ class PlexAdapter:
             return resp, None
         except Exception as e:
             return None, str(e)
+
+    def proxy_resized_poster(self, video_id: str, width: int, height: int):
+        p = self._resolve_item(video_id)
+        if not p:
+            return None, "not_found"
+        thumb = str(p.get("thumb", "") or "").strip()
+        if not thumb:
+            return None, "not_found"
+        width = max(80, min(int(width or 0), 640))
+        height = max(120, min(int(height or 0), 960))
+        inner_thumb = thumb
+        if self.token:
+            sep = "&" if "?" in inner_thumb else "?"
+            inner_thumb = f"{inner_thumb}{sep}{urllib.parse.urlencode({'X-Plex-Token': self.token})}"
+        query = {
+            "width": str(width),
+            "height": str(height),
+            "minSize": "0",
+            "upscale": "0",
+            "url": inner_thumb,
+        }
+        try:
+            resp = self._open("/photo/:/transcode", query=query, headers={"Accept": "image/*"})
+            return resp, None
+        except Exception as e:
+            logging.debug("Plex resized poster request failed for %s: %s", video_id, e)
+            return self.proxy_binary_by_kind(video_id, "poster")
