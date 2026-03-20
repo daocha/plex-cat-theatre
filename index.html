@@ -34,13 +34,50 @@
               <option value="">All folders</option>
             </select>
           </div>
-          <select id="themeSel">
-            <option value="neo-dark">Neo Dark</option>
-            <option value="graphite">Graphite Gray</option>
-            <option value="ivory-noir">Ivory Noir</option>
-            <option value="electric-cyan">Electric Cyan</option>
-            <option value="sunset-amber">Sunset Amber</option>
-          </select>
+          <div id="themePicker" class="theme-picker">
+            <button id="themeBtn" type="button" class="theme-btn">
+              Neo Dark
+            </button>
+            <div id="themePanel" class="theme-panel" style="display: none">
+              <div id="themeOptions" class="theme-options"></div>
+              <div
+                id="transitionBlock"
+                class="theme-transition"
+                style="display: none"
+              >
+                <div class="theme-transition-label">Android transition</div>
+                <div class="theme-transition-row">
+                  <button
+                    id="transitionSnapshot"
+                    type="button"
+                    class="theme-toggle"
+                    data-mode="snapshot"
+                  >
+                    Snapshot
+                  </button>
+                  <button
+                    id="transitionHead"
+                    type="button"
+                    class="theme-toggle"
+                    data-mode="head"
+                  >
+                    Classic
+                  </button>
+                </div>
+              </div>
+            </div>
+            <select id="themeSel" style="display: none">
+              <option value="neo-dark">Neo Dark</option>
+              <option value="graphite">Graphite Gray</option>
+              <option value="ivory-noir">Ivory Noir</option>
+              <option value="electric-cyan">Electric Cyan</option>
+              <option value="sunset-amber">Sunset Amber</option>
+            </select>
+            <select id="transitionSel" style="display: none">
+              <option value="snapshot">Transition: Snapshot</option>
+              <option value="head">Transition: Classic</option>
+            </select>
+          </div>
           <button
             id="rescan"
             type="button"
