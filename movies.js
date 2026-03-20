@@ -40,6 +40,7 @@ const BASE_PATH = getBasePath();
 let manualPlaybackMode = null;
 let currentPlaybackMode = null;
 let plexButton = null;
+let plexHomeLink = null;
 const PLAYBACK_OVERRIDE_PREFIX = "playback-override:";
 let skipManualOverrideLoad = false;
 
@@ -126,6 +127,84 @@ function withBase(path) {
   const clean = raw.replace(/^\/+/, "");
   return BASE_PATH ? `${BASE_PATH}/${clean}` : `/${clean}`;
 }
+
+const PLEX_POSTER_MAX_WIDTH = 640;
+const PLEX_POSTER_MAX_HEIGHT = 960;
+const PLEX_POSTER_MIN_WIDTH = 80;
+const PLEX_POSTER_MIN_HEIGHT = 120;
+const PLEX_POSTER_MAX_DPR = 2;
+const ANDROID_PLEX_POSTER_SCALE = 1.3;
+const IOS_PLEX_POSTER_SCALE = 1.15;
+const MOBILE_WARMUP_DELAY_MS = 900;
+
+function isPlexPosterUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw, window.location.href);
+    return /\/plex\/poster\/.+\.jpg$/i.test(parsed.pathname);
+  } catch (err) {
+    return /\/plex\/poster\/.+\.jpg(?:[?#]|$)/i.test(raw);
+  }
+}
+
+function getPlexPosterScale() {
+  const dpr = Math.max(
+    1,
+    Math.min(window.devicePixelRatio || 1, PLEX_POSTER_MAX_DPR),
+  );
+  if (isAndroidClient()) return dpr * ANDROID_PLEX_POSTER_SCALE;
+  if (isIOSLike()) return dpr * IOS_PLEX_POSTER_SCALE;
+  return 1;
+}
+
+function buildSizedPlexPosterUrl(url, width, height) {
+  if (!isPlexPosterUrl(url)) return String(url || "").trim();
+  const cssWidth = Math.max(0, Number(width) || 0);
+  const cssHeight = Math.max(0, Number(height) || 0);
+  const scale = getPlexPosterScale();
+  const reqWidth = Math.max(
+    PLEX_POSTER_MIN_WIDTH,
+    Math.min(PLEX_POSTER_MAX_WIDTH, Math.ceil(cssWidth * scale)),
+  );
+  const reqHeight = Math.max(
+    PLEX_POSTER_MIN_HEIGHT,
+    Math.min(PLEX_POSTER_MAX_HEIGHT, Math.ceil(cssHeight * scale)),
+  );
+  try {
+    const parsed = new URL(url, window.location.href);
+    parsed.searchParams.set("w", String(reqWidth));
+    parsed.searchParams.set("h", String(reqHeight));
+    return `${parsed.pathname}?${parsed.searchParams.toString()}`;
+  } catch (err) {
+    const [basePart, queryPart = ""] = String(url || "").trim().split("?", 2);
+    const search = new URLSearchParams(queryPart);
+    search.set("w", String(reqWidth));
+    search.set("h", String(reqHeight));
+    return `${basePart}?${search.toString()}`;
+  }
+}
+
+function shouldSkipPlexPosterSizing(img) {
+  if (!(img instanceof HTMLImageElement)) return true;
+  if (!isAndroidClient()) return false;
+  if (getAndroidZoomTransitionMode() === "head") return true;
+  return img.dataset.plexSizedLocked === "1";
+}
+
+function syncPlexPosterSizing(img) {
+  if (shouldSkipPlexPosterSizing(img)) return;
+  const currentSrc = String(img.getAttribute("src") || "").trim();
+  if (!isPlexPosterUrl(currentSrc)) return;
+  const rect = img.getBoundingClientRect();
+  if (!(rect.width > 0) || !(rect.height > 0)) return;
+  const next = buildSizedPlexPosterUrl(currentSrc, rect.width, rect.height);
+  if (!next || next === currentSrc || img.dataset.sizedSrc === next) return;
+  img.dataset.sizedSrc = next;
+  if (isAndroidClient()) img.dataset.plexSizedLocked = "1";
+  img.src = next;
+}
+
 function apiUrl(path) {
   const clean = String(path || "").replace(/^\/+/, "");
   return BASE_PATH ? `${BASE_PATH}/api/${clean}` : `/api/${clean}`;
@@ -308,8 +387,8 @@ function setMobileZoomLevel(level, { durationMs = null } = {}) {
 function getVisibleGridCardRects() {
   const rects = new Map();
   if (!grid) return rects;
-  const viewportTop = -160;
-  const viewportBottom = window.innerHeight + 160;
+  const viewportTop = -window.innerHeight * 2.5;
+  const viewportBottom = window.innerHeight * 2.5;
   grid.querySelectorAll(".card[data-id]").forEach((card) => {
     const id = card.dataset.id;
     if (!id) return;
@@ -434,6 +513,10 @@ function createZoomSnapshotLayer(cards, rects) {
     const sourceImg = card.querySelector("img");
     const cloneImg = clone.querySelector("img");
     if (sourceImg && cloneImg) {
+      cloneImg.loading = "eager";
+      cloneImg.decoding = "sync";
+      const liveSrc = sourceImg.currentSrc || sourceImg.src || sourceImg.getAttribute("src") || "";
+      if (liveSrc) cloneImg.src = liveSrc;
       const computed = window.getComputedStyle(sourceImg);
       cloneImg.style.objectFit = computed.objectFit || "cover";
       cloneImg.style.objectPosition = computed.objectPosition || "center center";
@@ -525,11 +608,14 @@ function animateSnapshotZoomTransition(work, before, anchor, zoomingIn, duration
     }
     zoomFadeInTimer = window.setTimeout(() => {
       zoomFadeInTimer = null;
-      destroyZoomSnapshotLayer(beforeLayer);
-      destroyZoomSnapshotLayer(afterLayer);
-      grid.style.opacity = "";
-      grid.classList.remove("zoom-transition-live");
-      zoomTransitionActive = false;
+      grid.style.opacity = "1";
+      window.requestAnimationFrame(() => {
+        destroyZoomSnapshotLayer(beforeLayer);
+        destroyZoomSnapshotLayer(afterLayer);
+        grid.style.opacity = "";
+        grid.classList.remove("zoom-transition-live");
+        zoomTransitionActive = false;
+      });
     }, transitionMs);
   });
 }
@@ -742,6 +828,7 @@ async function loadServerConfig() {
       const data = await res.json();
       serverConfig = data || {};
       debugEnabled = !!serverConfig.debug_enabled;
+      updatePlexHomeLink();
       updateDebugPanel();
       return serverConfig;
     } catch (err) {
@@ -749,6 +836,19 @@ async function loadServerConfig() {
     }
   })();
   return serverConfigPromise;
+}
+
+function updatePlexHomeLink() {
+  if (!plexHomeLink) return;
+  const enabled = !!serverConfig?.plex_enabled;
+  const href = String(serverConfig?.plex_base_url || "").trim();
+  if (!enabled || !href) {
+    plexHomeLink.style.display = "none";
+    plexHomeLink.removeAttribute("href");
+    return;
+  }
+  plexHomeLink.href = href;
+  plexHomeLink.style.display = "";
 }
 
 let debugDragActive = false;
@@ -2113,6 +2213,12 @@ function bindCardEvents(scope) {
     };
     if (img.complete) setTimeout(syncAspect, 0);
     else img.addEventListener("load", syncAspect, { once: true });
+    requestAnimationFrame(() => {
+      syncPlexPosterSizing(img);
+    });
+    img.addEventListener("load", () => {
+      syncPlexPosterSizing(img);
+    });
     const getVideo = () => {
       if (!card) return null;
       return videos.find((v) => v.id === card.dataset.id) || null;
@@ -2407,6 +2513,7 @@ function queueThumbPrefetch(url) {
 }
 
 function pumpThumbPrefetchQueue() {
+  if (zoomTransitionActive) return;
   while (
     activeThumbPrefetches < MAX_THUMB_PREFETCH_CONCURRENCY &&
     thumbPrefetchQueue.length
@@ -2460,8 +2567,13 @@ function getRenderedRange() {
 
 function scheduleThumbPrefetch() {
   if (thumbPrefetchTimer) clearTimeout(thumbPrefetchTimer);
+  const delay = isMobileLayout() ? 220 : 60;
   thumbPrefetchTimer = setTimeout(() => {
     thumbPrefetchTimer = null;
+    if (zoomTransitionActive) {
+      scheduleThumbPrefetch();
+      return;
+    }
     if (!filteredVideos.length) return;
     const { start, end } = getRenderedRange();
     const movingFast = scrollVelocity > 1200;
@@ -2475,7 +2587,7 @@ function scheduleThumbPrefetch() {
       queueThumbPrefetch(u);
     }
     pumpThumbPrefetchQueue();
-  }, 60);
+  }, delay);
 }
 
 async function preloadAllPages(loadId = activeLoadId) {
@@ -2707,11 +2819,38 @@ async function fetchNextPage(loadId = activeLoadId, opts = {}) {
   }
 }
 
+let catalogWarmupTimer = null;
+
+function clearCatalogWarmupTimer() {
+  if (!catalogWarmupTimer) return;
+  clearTimeout(catalogWarmupTimer);
+  catalogWarmupTimer = null;
+}
+
+function scheduleCatalogWarmup(loadId) {
+  clearCatalogWarmupTimer();
+  const runWarmup = async () => {
+    if (loadId !== activeLoadId) return;
+    await preloadAllPages(loadId);
+    if (loadId !== activeLoadId) return;
+    await saveSnapshotToCache();
+  };
+  if (!isMobileLayout()) {
+    return runWarmup();
+  }
+  catalogWarmupTimer = window.setTimeout(() => {
+    catalogWarmupTimer = null;
+    runWarmup().catch(() => {});
+  }, MOBILE_WARMUP_DELAY_MS);
+  return Promise.resolve();
+}
+
 async function load(forceNetwork = false) {
   if (loadInFlight) return loadInFlight;
   loadInFlight = (async () => {
     activeLoadId += 1;
     const loadId = activeLoadId;
+    clearCatalogWarmupTimer();
     const headers = deviceHeaders();
     await loadServerConfig();
 
@@ -2770,10 +2909,9 @@ async function load(forceNetwork = false) {
       await fetchNextPage(loadId, { render: false });
       renderChunk(true);
       await ensurePrefetchAhead(loadId);
-      // Eagerly load all remaining pages upfront; scrolling does render only.
-      await preloadAllPages(loadId);
-      await saveSnapshotToCache();
       uiReady = true;
+      // Delay heavy warm-up on touch devices so the first interaction after reload stays responsive.
+      await scheduleCatalogWarmup(loadId);
     } finally {
       loadInFlight = null;
     }
@@ -2784,6 +2922,7 @@ const themePicker = document.getElementById("themePicker");
 const themeBtn = document.getElementById("themeBtn");
 const themePanel = document.getElementById("themePanel");
 const themeOptions = document.getElementById("themeOptions");
+plexHomeLink = document.getElementById("plexHomeLink");
 const transitionBlock = document.getElementById("transitionBlock");
 const transitionSnapshotBtn = document.getElementById("transitionSnapshot");
 const transitionHeadBtn = document.getElementById("transitionHead");
