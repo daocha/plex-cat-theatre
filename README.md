@@ -114,6 +114,7 @@ Important fields:
 - `thumbs_dir`: directory for thumbnails and preview frames
 - `private_folder`: folder prefixes treated as private
 - `private_passcode`: private-mode passcode hash
+- `mount_script`: optional command to run when a direct-play or Plex media request hits a missing media folder; useful for remounting sleeping NAS volumes before returning a 404
 - `auto_scan_on_start`: rescan media on startup
 - `on_demand_transcode`: enable built-in transcoding for source containers
 - `on_demand_hls`: enable built-in HLS playlists for source containers
@@ -133,6 +134,7 @@ Use this mode when you do not want Plex involved at all:
     "~/Movies"
   ],
   "thumbs_dir": "./cache/thumbs",
+  "mount_script": "",
   "private_folder": [],
   "private_passcode": "",
   "on_demand_transcode": true,
@@ -152,6 +154,7 @@ Use this mode when you want Plex-backed playback for compatibility-sensitive for
     "~/Movies"
   ],
   "thumbs_dir": "./cache/thumbs",
+  "mount_script": "",
   "private_folder": [],
   "private_passcode": "",
   "on_demand_transcode": true,
@@ -382,11 +385,24 @@ Thumbnails, preview frames, and Plex poster images are served with long-lived im
 Gallery metadata snapshots are cached in IndexedDB with bounded storage:
 
 - 1-day TTL
-- maximum record count
-- maximum estimated total size
+- up to 8 snapshot records
+- up to ~18 MB estimated total size
 - eviction of older entries when limits are exceeded
 
-This improves page bootstrap time, but image HTTP caching is the larger contributor to perceived gallery responsiveness.
+Each cached snapshot stores:
+
+- server `catalogStatus`
+- folder list cache
+- the loaded `videos` array
+- pagination counters such as `serverTotal`, `serverOffset`, and `serverExhausted`
+
+This improves page bootstrap time by skipping the initial status, folder, and paged video fetch flow when a fresh snapshot already exists. Thumbnail and poster image HTTP caching is still the larger contributor to perceived gallery responsiveness.
+
+Eviction is opportunistic rather than scheduled:
+
+- expired entries are removed on cache read or during later cache pruning
+- pruning also runs after the frontend saves a fresh snapshot
+- browser storage pressure or manual site-data clearing can also remove IndexedDB data outside the app
 
 ## Scan Behavior
 
@@ -476,15 +492,32 @@ If you use a context path such as `/movie/`, prepend it to the endpoint:
 curl -s "http://localhost:9245/movie/rescan?full=1" | python3 -m json.tool
 ```
 
+### Rescan UI
+
+The `Rescan` button in the header now opens a small action dialog instead of immediately starting an incremental scan.
+
+Available actions:
+
+- `Rescan`: incremental scan for new or changed files
+- `Full Scan`: clears saved scan state and forces full metadata revalidation
+- `Refresh Database`: clears the browser IndexedDB snapshot cache and reloads fresh catalog data from the server without starting a backend scan
+
+`Refresh Database` is useful when the backend index is already correct but the browser is still showing stale cached metadata.
+
+### Missing Mount Recovery
+
+If `mount_script` is configured and a media request hits a missing folder, the server will:
+
+1. detect that the parent folder does not exist
+2. invoke the configured mount script once
+3. re-check the target path
+4. return `Media folder is not mounted` with HTTP 404 only if the folder is still unavailable
+
+This recovery path is used for direct playback and the Plex-backed playback path. On the frontend, playback 404s are treated as terminal for that attempt, and the viewer shows a retry message instead of repeatedly hammering the server.
+
 ## Frontend Development Notes
 
-If you edit `movies.js`, rebuild `movies.min.js` before serving changes:
-
-```bash
-npx terser movies.js -c -m -o movies.min.js
-```
-
-Then bump the `movies.min.js?v=...` value in `index.html` so browsers fetch the updated bundle instead of reusing the old cached asset.
+The app currently loads `movies.js` directly from `index.html`, so frontend changes take effect without rebuilding `movies.min.js`.
 
 ## Private Mode
 
