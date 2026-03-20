@@ -187,6 +187,7 @@ function buildSizedPlexPosterUrl(url, width, height) {
 
 function shouldSkipPlexPosterSizing(img) {
   if (!(img instanceof HTMLImageElement)) return true;
+  if (isIPadClient()) return true;
   if (!isAndroidClient()) return false;
   if (getAndroidZoomTransitionMode() === "head") return true;
   return img.dataset.plexSizedLocked === "1";

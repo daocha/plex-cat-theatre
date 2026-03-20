@@ -87,14 +87,14 @@ body[data-theme="sunset-amber"] #toTopBtn{border-color:#8f5f2f;background:#3a241
 .plex-btn:hover{filter:brightness(1.1)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .modal video{display:block;width:auto;height:auto;max-width:100%;max-height:calc(94vh - 56px);margin:0 auto;background:#000;object-fit:contain}
-.vloader{display:none;flex-direction:column;align-items:center;justify-content:center;width:min(400px,88vw);max-width:88vw;min-height:220px;height:clamp(220px,28vh,300px);max-height:46vh;margin:20px auto 24px;background:linear-gradient(145deg,#121629,#1b2240);border:1px solid #334078;border-radius:18px;box-shadow:inset 0 0 24px rgba(110,140,255,.14),0 8px 26px rgba(0,0,0,.35);overflow:visible;padding:28px 18px 30px;box-sizing:border-box}
+.vloader{display:none;flex-direction:column;align-items:center;justify-content:center;width:min(400px,88vw);max-width:88vw;min-height:220px;height:clamp(220px,28vh,300px);max-height:46vh;margin:20px auto 24px;background:linear-gradient(145deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:18px;box-shadow:inset 0 0 24px rgba(110,140,255,.14),0 8px 26px rgba(0,0,0,.35);overflow:visible;padding:28px 18px 30px;box-sizing:border-box;color:var(--fg)}
 .vloader.on{display:flex}
 .preload-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:55}
 .preload-overlay.on{display:flex}
 .vloader .cat{position:relative;width:260px;height:120px;display:flex;align-items:center;justify-content:center}
 .vloader .cat::before{content:'🐱';position:absolute;left:18px;font-size:78px;line-height:1;filter:drop-shadow(0 3px 10px rgba(0,0,0,.35));animation:cat-run 900ms linear infinite}
 .vloader .cat::after{content:'💨';position:absolute;right:16px;opacity:.75;font-size:30px;animation:trail 900ms linear infinite}
-.vloader .txt{margin-top:20px;font-size:17px;opacity:.95;letter-spacing:.4px}
+.vloader .txt{margin-top:20px;font-size:17px;opacity:.95;letter-spacing:.4px;color:inherit}
 .vloader .dots::after{content:'...';display:inline-block;width:1.2em;animation:dots 1100ms steps(4,end) infinite;vertical-align:bottom}
 @keyframes cat-run{0%{transform:translateX(-26px) translateY(0) rotate(0deg)}25%{transform:translateX(16px) translateY(-3px) rotate(-3deg)}50%{transform:translateX(52px) translateY(0) rotate(2deg)}75%{transform:translateX(88px) translateY(-3px) rotate(-3deg)}100%{transform:translateX(118px) translateY(0) rotate(0deg)}}
 @keyframes trail{0%{opacity:.2;transform:translateX(0)}50%{opacity:.9;transform:translateX(6px)}100%{opacity:.2;transform:translateX(0)}}
