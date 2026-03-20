@@ -8,9 +8,11 @@ import logging
 import math
 import mimetypes
 import re
+import shlex
 import subprocess
 import threading
 import time
+import urllib.error
 import urllib.parse
 from pathlib import Path
 from typing import Dict
@@ -71,6 +73,7 @@ cfg_runtime = {
     "direct_playback_enabled": True,
     "direct_audio_whitelist": {"aac", "mp3"},
     "debug_enabled": False,
+    "mount_script": "",
 }
 APPROVED_PRIVATE_DEVICES: set[str] = set()
 PRIVATE_STATE_LOCK = threading.Lock()
@@ -151,6 +154,72 @@ def build_plex_hls_proxy_url(
         ) + "?"
     query = urllib.parse.urlencode({"u": clean_target, "root": mount_root or ""})
     return proxy_path + query
+
+
+def extract_video_id_from_referer(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        path = urllib.parse.urlparse(raw).path
+    except Exception:
+        path = raw
+    match = re.search(r"/plex/video/([^/?#]+?)(?:\.m3u8)?$", path)
+    if match:
+        return urllib.parse.unquote(match.group(1))
+    match = re.search(r"/video/([^/?#]+)$", path)
+    if match:
+        return urllib.parse.unquote(match.group(1))
+    return ""
+
+
+def run_mount_script() -> bool:
+    command_text = str(cfg_runtime.get("mount_script", "") or "").strip()
+    if not command_text:
+        return False
+    try:
+        command = shlex.split(command_text)
+        if not command:
+            return False
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+        if completed.returncode == 0:
+            logging.info("Mount script succeeded: %s", command_text)
+            return True
+        logging.warning(
+            "Mount script failed: rc=%d stdout=%r stderr=%r",
+            completed.returncode,
+            completed.stdout.strip(),
+            completed.stderr.strip(),
+        )
+    except Exception as exc:
+        logging.warning("Mount script execution failed: %s", exc)
+    return False
+
+
+def ensure_media_path_ready(media_path: Path | None) -> tuple[Path | None, tuple[str, int] | None]:
+    if media_path and media_path.exists():
+        return media_path, None
+    folder = media_path.parent if media_path else None
+    folder_missing = bool(folder and not folder.exists())
+    if folder_missing and str(cfg_runtime.get("mount_script", "") or "").strip():
+        logging.info("Media folder missing, attempting mount recovery: %s", folder)
+        run_mount_script()
+        if media_path and media_path.exists():
+            return media_path, None
+        folder_missing = bool(folder and not folder.exists())
+    if folder_missing:
+        return None, ("Media folder is not mounted", 404)
+    return None, ("File not found", 404)
+
+
+def ensure_media_id_ready(video_id: str) -> tuple[Path | None, tuple[str, int] | None]:
+    return ensure_media_path_ready(catalog.video_map.get(urllib.parse.unquote(video_id)))
 
 
 def _ass_time_to_vtt(value: str) -> str:
@@ -644,9 +713,9 @@ def hls_playlist(vid):
     ok, deny = require_media_access(urllib.parse.unquote(vid))
     if not ok:
         return deny
-    video_path = catalog.video_map.get(urllib.parse.unquote(vid))
-    if not video_path or not video_path.exists():
-        return "Not found", 404
+    video_path, err = ensure_media_id_ready(vid)
+    if err:
+        return err
     if not ON_DEMAND_TRANSCODE or video_path.suffix.lower() not in SOURCE_EXTENSIONS:
         return "HLS not enabled for this file", 400
 
@@ -680,9 +749,9 @@ def hls_segment(vid, seq):
     ok, deny = require_media_access(urllib.parse.unquote(vid))
     if not ok:
         return deny
-    video_path = catalog.video_map.get(urllib.parse.unquote(vid))
-    if not video_path or not video_path.exists():
-        return "Not found", 404
+    video_path, err = ensure_media_id_ready(vid)
+    if err:
+        return err
     if not ON_DEMAND_TRANSCODE or video_path.suffix.lower() not in SOURCE_EXTENSIONS:
         return "HLS not enabled for this file", 400
     if not FFMPEG:
@@ -844,6 +913,9 @@ def plex_video(vid):
         return deny
     if not plex_adapter or not plex_adapter.enabled:
         return "Not found", 404
+    video_path, err = ensure_media_id_ready(vid)
+    if err:
+        return err
 
     ensure_plex_catalog_binding(
         force_refresh=not bool(getattr(plex_adapter, "_by_video_id", None))
@@ -938,8 +1010,27 @@ def plex_hls_proxy():
             if plex_adapter
             else None
         )
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            referer_video_id = extract_video_id_from_referer(request.headers.get("Referer", ""))
+            if referer_video_id:
+                _, err = ensure_media_id_ready(referer_video_id)
+                if err and err[0] == "Media folder is not mounted":
+                    return err
+                try:
+                    upstream = (
+                        plex_adapter.open_absolute(target, headers=upstream_headers)
+                        if plex_adapter
+                        else None
+                    )
+                except Exception:
+                    upstream = None
+            else:
+                upstream = None
+        else:
+            upstream = None
     except Exception:
-        return "Not found", 404
+        upstream = None
     if not upstream:
         return "Not found", 404
 
@@ -1019,9 +1110,9 @@ def video(vid):
     ok, deny = require_media_access(urllib.parse.unquote(vid))
     if not ok:
         return deny
-    video_path = catalog.video_map.get(urllib.parse.unquote(vid))
-    if not video_path or not video_path.exists():
-        return "Not found", 404
+    video_path, err = ensure_media_id_ready(vid)
+    if err:
+        return err
     suffix = video_path.suffix.lower()
     ctype = "video/mp2t" if suffix == ".ts" else (
         mimetypes.guess_type(video_path.name)[0] or "application/octet-stream"
@@ -1186,7 +1277,7 @@ class App:
             private_passcode=cfg.get("private_passcode", ""),
             transcode_enabled=cfg.get("transcode", True),
             verify_passcode_fn=verify_passcode,
-            generate_thumbs=not plex_enabled,
+            generate_thumbs=True,
             scan_checkpoint_cb=(
                 (lambda scanning: schedule_plex_overlay_refresh(
                     persist_index=not scanning,
@@ -1214,6 +1305,7 @@ class App:
             if str(codec or "").strip()
         }
         cfg_runtime["debug_enabled"] = bool(cfg.get("debug_enabled", False))
+        cfg_runtime["mount_script"] = str(cfg.get("mount_script", "") or "").strip()
         plex_adapter = PlexAdapter(
             enabled=plex_enabled,
             plex_cfg=plex_cfg,
