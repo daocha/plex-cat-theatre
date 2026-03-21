@@ -1,138 +1,145 @@
-# Cat Theatre Movies Server 🎬
+# Cat Theatre Movies Server
 
-A self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`, with optional Plex integration for compatibility-focused playback.
+> Lightweight self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`.
 
-The project is intentionally lightweight:
+**Languages**
 
-- small Python dependency surface
-- no database requirement
+`English` | [简体中文](./README.zh-CN.md) | [繁體中文（香港）](./README.zh-HK.md) | [繁體中文（台灣）](./README.zh-TW.md) | [Français](./README.fr.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [Deutsch](./README.de.md) | [ไทย](./README.th.md) | [Tiếng Việt](./README.vi.md) | [Nederlands](./README.nl.md)
+
+---
+
+## What It Is
+
+Cat Theatre is designed for local media libraries that need:
+
 - file-system-first cataloging
-- portable polling-based scan flow instead of OS-specific watcher dependence
-- optional Plex integration layered on top rather than required for core playback
+- thumbnail and preview generation
+- device-based private-folder access
+- reverse-proxy deployment under a path prefix such as `/movie/`
+- direct playback, local transcoding, or Plex-backed playback
 
-It is designed for:
+It stays intentionally small:
 
-- 📂 local media libraries spread across one or more folders
-- 🖼️ thumbnail and preview generation
-- 🔐 private-folder access control by device
-- 🌐 reverse-proxy deployment under a path prefix such as `/movie/`
-- 🎧 mixed playback strategies: direct file playback, built-in local transcoding, or Plex-backed HLS
+- no database required
+- small Python dependency surface
+- portable polling-based scans instead of OS-specific watcher requirements
+- Plex is optional, not required for core playback
 
-## Features
+---
 
-- 🔍 Multi-root media scanning
-- 🎞️ Poster thumbnails and preview frame generation
-- 🗝️ Private folders with device-based unlock
-- ✅ Native direct playback for browser-safe formats (AAC/MP3 whitelist)
-- 🧊 Built-in local transcoding for `.mkv` and `.ts` when enabled
-- 💎 Deep Plex Server integration for playback, posters, subtitles, and HLS proxying
-- 🔁 Context-path-aware routing for reverse proxies
-- 🗄️ Aggressive browser image caching plus IndexedDB metadata cache with configurable TTL
+## Highlights
 
-### UX & Playback Notes ✨
+| Area | What You Get |
+| --- | --- |
+| Library | Multi-root scanning, private folders, browser-side snapshot cache |
+| Media | Thumbnails, preview frames, subtitle extraction, direct-play safety checks |
+| Playback | Native direct play, local HLS/fMP4 transcoding, optional Plex HLS |
+| Deployment | Reverse-proxy path-prefix support, mount recovery hook, low dependency footprint |
 
-- The built-in debug panel lives in the bottom-right, stays fully visible on load, and slides to the nearest edge when you drag it far enough (~30% hidden). Tap the exposed edge to slide it back in without changing its vertical position, and a small dot reminds you the panel is off-screen.
-- Video playback automatically chooses the safer path: direct play for supported browsers, Plex HLS for heavy containers, and manual toggles are stored per-video in IndexedDB with no TTL.
-- Cached thumbnails and metadata respect your browser storage limits while keeping frequently-used results fresh.
+---
 
-## Project Structure
+## Project Layout
 
-- `movies_server.py`: Flask app entrypoint and route wiring
-- `movies_server_core.py`: shared server helpers for auth, config, cookies, and mount-path handling
-- `movies_catalog.py`: catalog scanning, thumbnail generation, subtitle extraction, and local transcode helpers
-- `movies_server_plex.py`: Plex adapter, poster/subtitle mapping, Plex HLS proxying
+- `movies_server.py`: Flask entrypoint and route wiring
+- `movies_server_core.py`: shared server helpers, config loading, auth helpers, path handling
+- `movies_catalog.py`: scanning, metadata probing, thumbs, previews, subtitles, local transcode helpers
+- `movies_server_plex.py`: Plex adapter, poster/subtitle mapping, Plex HLS proxy support
 - `movies.js`: frontend source
-- `movies.min.js`: frontend bundle loaded by `index.html`
+- `movies.min.js`: minified frontend bundle
 - `movies.css`: gallery and player styles
-- `passcode.py`: helper for rotating the private-mode passcode
+- `passcode.py`: private-passcode helper
+
+---
 
 ## Requirements
 
 ### Python
 
-Install Python dependencies:
-
 ```bash
 pip install -r requirements.txt
 ```
 
-Current `requirements.txt` covers the Python packages used by the server:
+Packages:
 
 - `Flask`
 - `waitress`
 
-### System Binaries
-
-The built-in transcoding and preview generation paths require:
-
-- `ffmpeg`
-- `ffprobe`
-
-Verify they are available:
+### System Tools
 
 ```bash
 which ffmpeg
 which ffprobe
 ```
 
+Required for:
+
+- thumbnail generation
+- preview generation
+- metadata probing
+- on-demand transcoding
+
+---
+
 ## Quick Start
 
-1. Copy the sample config:
+### 1. Copy the sample config
 
 ```bash
 cp movies_config.sample.json movies_config.json
 ```
 
-2. Edit `movies_config.json` for your environment.
+### 2. Edit the config
 
-3. Start the server:
+Minimum fields to review:
+
+- `root`
+- `thumbs_dir`
+- `private_folder`
+- `private_passcode`
+- `mount_script`
+- `enable_plex_server`
+- `direct_playback`
+
+### 3. Start the server
 
 ```bash
 python3 movies_server.py --config movies_config.json
 ```
 
-4. Open the UI:
+### 4. Open the UI
 
 ```text
 http://localhost:9245
 ```
 
-If you deploy the app behind a reverse proxy under a prefix such as `/movie/`, open the prefixed URL instead.
+If you deploy behind a reverse proxy under `/movie/`, open the prefixed path instead.
 
-## Configuration
+---
 
-The sample config is intentionally sanitized and does not include:
+## Configuration Notes
 
-- real file-system paths
-- real Plex tokens
-- real passcodes
-- device-specific values
-
-Important fields:
+### Important Fields
 
 - `root`: media roots to scan
-- `thumbs_dir`: directory for thumbnails and preview frames
+- `thumbs_dir`: where thumbnails and preview frames are stored
 - `private_folder`: folder prefixes treated as private
 - `private_passcode`: private-mode passcode hash
-- `mount_script`: optional command to run when a direct-play or Plex media request hits a missing media folder; useful for remounting sleeping NAS volumes before returning a 404
-- `auto_scan_on_start`: rescan media on startup
-- `on_demand_transcode`: enable built-in transcoding for source containers
-- `on_demand_hls`: enable built-in HLS playlists for source containers
+- `mount_script`: optional remount command used when playback hits an offline media folder
+- `auto_scan_on_start`: scan automatically on startup
+- `on_demand_transcode`: enable local transcoding
+- `on_demand_hls`: enable local HLS playlists
 - `enable_plex_server`: enable Plex integration
-- `plex.base_url`: Plex server base URL
+- `plex.base_url`: Plex server URL
 - `plex.token`: Plex token
-- `debug_enabled`: show the built-in debug overlay (bottom-right) that reports scan status and candidate selection
-- `direct_playback`: object with `enabled` (default `true`) and `audio_whitelist` (default `["aac","mp3"]`); direct playback is allowed only when a file's audio codecs are a subset of this whitelist
+- `debug_enabled`: show the floating debug panel
+- `direct_playback.enabled`: enable direct playback path
+- `direct_playback.audio_whitelist`: allowed direct-play audio codecs
 
 ### Minimal Local-Only Example
 
-Use this mode when you do not want Plex involved at all:
-
 ```json
 {
-  "root": [
-    "~/Movies"
-  ],
+  "root": ["~/Movies"],
   "thumbs_dir": "./cache/thumbs",
   "mount_script": "",
   "private_folder": [],
@@ -144,15 +151,11 @@ Use this mode when you do not want Plex involved at all:
 }
 ```
 
-### Plex-Integrated Example
-
-Use this mode when you want Plex-backed playback for compatibility-sensitive formats:
+### Plex Example
 
 ```json
 {
-  "root": [
-    "~/Movies"
-  ],
+  "root": ["~/Movies"],
   "thumbs_dir": "./cache/thumbs",
   "mount_script": "",
   "private_folder": [],
@@ -168,408 +171,122 @@ Use this mode when you want Plex-backed playback for compatibility-sensitive for
 }
 ```
 
-Plex scan behavior:
+### Plex Scan Behavior
 
-- local poster thumbnail generation is skipped to avoid unnecessary `ffmpeg` work
-- existing cached local thumbnails can still be reused if they already exist
-- preview-frame generation remains enabled, because Plex posters do not replace hover or tap previews
-- Plex integration stays optional; the server still works in local-only mode without Plex
+- local poster thumbnail generation is skipped when Plex posters are available
+- existing cached local thumbs can still be reused
+- preview-frame generation still runs
+- Plex stays optional; local-only mode still works
 
-### How to Get a Plex Token
+---
 
-You need a Plex token for the optional Plex integration.
-
-Common ways to get it:
-
-#### Method 1: From an Existing Plex Web Session
-
-1. Open the Plex web app in your browser and sign in.
-2. Open browser developer tools.
-3. Go to the Network tab.
-4. Refresh the page.
-5. Inspect any request sent to your Plex server.
-6. Look for the `X-Plex-Token` value in the request URL or headers.
-
-#### Method 2: From Browser Storage
-
-In Plex Web, the token is often present in browser storage for the Plex app session. You can inspect:
-
-- Local Storage
-- Session Storage
-- request headers or query parameters in DevTools
-
-Search for `X-Plex-Token`.
-
-#### Method 3: From a Direct Local Request
-
-If you already have a working Plex web session on the same machine, you can sometimes see the token by visiting Plex-related requests in DevTools and checking the request URL for:
-
-```text
-X-Plex-Token=...
-```
-
-Security notes:
-
-- treat the Plex token like a password
-- do not commit it into git
-- keep it only in `movies_config.json`, which is gitignored in this project
-
-## Playback Modes
-
-The application supports three playback paths.
+## Playback Paths
 
 ### 1. Native Direct Playback
 
-Used for browser-safe files such as `.mp4`, `.m4v`, and `.webm`.
+Best for browser-safe files such as `.mp4`, `.m4v`, and `.webm`.
 
-Behavior:
+- streams from `/video/<id>`
+- supports range requests
+- uses the direct-play audio whitelist
 
-- serves the local file directly from `/video/<id>`
-- supports HTTP range requests for seeking
-- avoids transcoding overhead when the browser can play the file natively
+### 2. Local Transcoding Without Plex
 
-Best for:
+Used when Plex is disabled or when you want a fully local stack.
 
-- MP4/H.264-style files
-- devices and browsers known to support the file directly
-- audio codecs that match the `direct_playback.audio_whitelist` (default `["aac","mp3"]`); mismatched codecs such as DTS will fall through to the Plex-backed path for compatibility
-
-### 2. Built-In Local Transcoding Without Plex
-
-This is the fallback path when Plex is not enabled, or when you intentionally want to stay fully local.
-
-Current implementation in `movies_server.py`:
-
-- source-container handling is currently implemented for `.mkv` and `.ts`
-- when `on_demand_hls` is enabled, those files can be exposed as local HLS at `/hls/<id>/index.m3u8`
-- when `on_demand_transcode` is enabled, those files can also be streamed as fragmented MP4 from `/video/<id>?fmp4=1`
-- local HLS segments are generated on demand with `ffmpeg`
-- HLS segment encoding attempts the configured hardware codec first, then falls back to `libx264` if the hardware path fails
-- fMP4 output is generated with software `libx264` + AAC
-
-What this means in practice:
-
-- yes, the server supports full on-demand transcoding without Plex
-- yes, it supports a softer compatibility path through fragmented MP4 output
-- no, this path is not a full Plex replacement in terms of media-session management or device-specific codec negotiation
-- yes, it is complete enough to serve `.mkv` and `.ts` to browsers that cannot play those containers directly
+- local HLS via `/hls/<id>/index.m3u8`
+- fragmented MP4 fallback via `/video/<id>?fmp4=1`
+- source-container support is currently centered on `.mkv` and `.ts`
 
 ### 3. Plex-Backed Playback
 
-When Plex integration is enabled:
+Used for compatibility-sensitive playback.
 
-- the frontend can use `plex_stream_url` for compatibility-sensitive playback
-- Plex generates the upstream HLS playlist
-- this server rewrites the playlist and proxies nested playlist and segment requests through `/plex/hls/proxy`
-- the browser still talks to this app, not directly to the Plex server
-- periodic scans skip generating new local poster thumbnails, which reduces background scan cost
+- Plex HLS playlist proxying
+- Plex posters
+- Plex subtitles
+- Plex-backed fallback path for harder formats
 
-This keeps Plex integration strong without making Plex mandatory for the rest of the application:
+---
 
-- the gallery, scanning, auth, and direct/local playback stack still remain lightweight and self-contained
-- Plex is used where it adds the most value: hard containers, subtitle selection, and compatibility-focused playback
+## Plex Token
 
-Best for:
+Common ways to get it:
 
-- MKV/TS content on devices with weak codec/container support
-- cases where Plex subtitle selection or stream normalization is preferred
+### Existing Plex Web Session
 
-## Playback Selection Policy
+1. Open Plex Web and sign in.
+2. Open browser DevTools.
+3. Refresh the page.
+4. Inspect a request to your Plex server.
+5. Find `X-Plex-Token` in the URL or headers.
 
-Current frontend behavior:
+### Browser Storage
 
-- direct playback only wins for `.mp4`, `.m4v`, and `.webm` files whose audio codecs are in the configured `direct_playback.audio_whitelist` (default `["aac","mp3"]`); unsupported codecs such as DTS automatically route through Plex
-- Plex stays preferred for `.mkv`/`.ts`, for direct links that are actually fMP4/HLS, or whenever the direct audio whitelist rejects the codec
-- the fallback timer is tuned to be longer on native iOS HLS so the Plex stream has more time to warm up before the player switches candidates
+Check:
 
-This means:
+- Local Storage
+- Session Storage
+- request URLs in DevTools
 
-- without Plex, the app still supports direct play and built-in local transcoding
-- with Plex, harder containers can be routed through Plex while easy formats stay direct where appropriate
+Security:
 
-## Debug Overlay
+- treat the Plex token like a password
+- do not commit it
+- keep it only in `movies_config.json`
 
-Enable `debug_enabled` in `movies_config.json` to keep a permanent debug overlay in the lower-right corner of the viewer. The panel reports:
+---
 
-- whether the server is favoring direct playback or Plex
-- the configured `direct_playback.audio_whitelist`
-- the current playback candidate and video ID
-- recent scan progress metrics (phase, processed entries, videos seen)
+## UX Notes
 
-You can inspect the active config values with:
+- The debug panel starts in the bottom-right and can be dragged.
+- Playback mode selection can switch between direct and Plex paths.
+- Browser snapshot caching speeds up reloads while respecting storage limits.
+- Mobile zoom layouts support both classic and snapshot-style transitions where enabled.
 
-```bash
-curl -s http://localhost:9245/api/config | python3 -m json.tool
-```
+---
 
-If you serve the app under `/movie/`, use `http://localhost:9245/movie/api/config`. This JSON mirrors the same fields and shows whether `debug_enabled` is on.
+## Operational Notes
 
-## Authentication Model
+### Private Mode
 
-The app uses different transport methods depending on the request type.
+- unlock is device-based
+- browser cache is cleared when locking or unlocking
+- private visibility follows server authorization state
 
-- API requests use the `X-Device-Id` header
-- HLS and Plex proxy requests use the `X-Device-Id` header
-- native direct media requests use the `movies_device_id` cookie fallback
+### NAS / Mount Recovery
 
-This split exists because a native `<video src="...">` request cannot attach arbitrary custom headers, while XHR/fetch-based requests can.
+- if `mount_script` is configured, playback can attempt self-recovery before returning a missing-media error
 
-## Reverse Proxy and Context Path Support
+### Reverse Proxy
 
-The app supports deployment under a subpath such as:
+- the app supports path-prefix mounting
+- routes stay valid under prefixes such as `/movie/`
 
-- `https://example.com/movie/`
-- `https://example.com/cinema/`
+---
 
-Routing is designed to preserve the active mount prefix for:
+## Running Behind Launchd / LaunchAgent
 
-- direct media
-- local HLS
-- Plex HLS proxy requests
-- poster and subtitle assets
-
-If you change the public context path, the app should continue to generate matching media URLs instead of assuming a hard-coded root path.
-
-## Remote Plex Access With Tailscale Subnet Router
-
-If the custom UI is reachable remotely but the Plex server is only reachable on a private LAN, Plex playback will only work if the movies server host can still reach the Plex backend directly.
-
-### Same Host
-
-If Plex and this app run on the same machine, use loopback:
-
-```json
-"plex": {
-  "base_url": "http://127.0.0.1:32400"
-}
-```
-
-No subnet router is needed in that case.
-
-### Plex on Another Machine in the LAN
-
-Advertise the LAN route from a Tailscale node that can reach Plex:
+Typical start command:
 
 ```bash
-sudo tailscale up --advertise-routes=192.168.50.0/24
+python3 movies_server.py --config movies_config.json
 ```
 
-Approve the route in the Tailscale admin console, then verify reachability from the movies server host:
+Recommended:
+
+- keep logs outside the repo
+- restart after config changes that affect server behavior
+
+---
+
+## Development
+
+Useful checks:
 
 ```bash
-curl http://192.168.50.10:32400/identity
+python3 -m py_compile movies_server.py movies_server_core.py movies_server_plex.py movies_catalog.py
+node --check movies.js
 ```
 
-Then point the app to the Plex host on the routed LAN:
-
-```json
-"plex": {
-  "base_url": "http://192.168.50.10:32400"
-}
-```
-
-Notes:
-
-- the browser does not need direct network access to Plex
-- the movies server process must be able to reach `plex.base_url`
-- a reverse proxy or MagicDNS name for the UI does not automatically make Plex reachable
-
-## Caching Strategy
-
-### Image Caching
-
-Thumbnails, preview frames, and Plex poster images are served with long-lived immutable cache headers so repeat visits and normal refreshes can reuse disk cache more aggressively.
-
-### Metadata Caching
-
-Gallery metadata snapshots are cached in IndexedDB with bounded storage:
-
-- 1-day TTL
-- up to 8 snapshot records
-- up to ~18 MB estimated total size
-- eviction of older entries when limits are exceeded
-
-Each cached snapshot stores:
-
-- server `catalogStatus`
-- folder list cache
-- the loaded `videos` array
-- pagination counters such as `serverTotal`, `serverOffset`, and `serverExhausted`
-
-This improves page bootstrap time by skipping the initial status, folder, and paged video fetch flow when a fresh snapshot already exists. Thumbnail and poster image HTTP caching is still the larger contributor to perceived gallery responsiveness.
-
-Eviction is opportunistic rather than scheduled:
-
-- expired entries are removed on cache read or during later cache pruning
-- pruning also runs after the frontend saves a fresh snapshot
-- browser storage pressure or manual site-data clearing can also remove IndexedDB data outside the app
-
-## Scan Behavior
-
-The catalog scan is designed to be incremental in cost even though it still walks each configured root.
-
-Current behavior:
-
-- unchanged files reuse cached `mtime + size` signatures so aspect probing and subtitle resolution are skipped
-- periodic scans no longer sort the full path list before processing, which reduces needless traversal overhead
-- deleted files are removed from the in-memory catalog and from the persisted catalog index
-- deleted files also trigger cleanup of generated thumbnail and preview-cache artifacts
-- index saves reuse cached file signature data instead of statting every file again during persistence
-
-What the scan still does:
-
-- it still walks the configured media roots to detect added, changed, and deleted files
-- it still queues preview generation when preview images are missing
-
-What it does not do:
-
-- it does not checksum large media files during periodic scans
-- it does not regenerate thumbnails, previews, or metadata for unchanged files unless their cached artifacts are missing
-
-### Force Full Rescan
-
-Normal rescans are incremental. If you want to force a true full rebuild of scan-derived state, use:
-
-```text
-/rescan?full=1
-```
-
-This is useful if:
-
-- someone manually deleted the thumbnail or preview cache folder
-- you suspect the saved scan manifest is stale
-- you want to invalidate the saved scan caches and rebuild derived scan state from scratch
-
-What `full=1` does:
-
-- clears the saved scan signature and readiness caches in memory
-- forces the next scan to treat files as needing full validation
-- keeps the resumable checkpoint and persisted catalog behavior intact during the scan
-
-Practical note:
-
-- if the cache folder is deleted, a normal incremental rescan will usually regenerate missing derived assets anyway
-- `full=1` is the explicit recovery mode when you want deterministic full revalidation
-
-### Check Scan Status
-
-To inspect current server and scan state in a readable way:
-
-```bash
-curl -s http://localhost:9245/api/status | python3 -m json.tool
-```
-
-If you serve the app under a context path such as `/movie/`, use:
-
-```bash
-curl -s http://localhost:9245/movie/api/status | python3 -m json.tool
-```
-
-This shows:
-
-- whether the catalog is currently scanning
-- the current `scan_progress` payload
-- video counts
-- private-mode and Plex status
-
-### Trigger Rescan
-
-Normal incremental rescan:
-
-```bash
-curl -s http://localhost:9245/rescan | python3 -m json.tool
-```
-
-Forced full rescan:
-
-```bash
-curl -s "http://localhost:9245/rescan?full=1" | python3 -m json.tool
-```
-
-If you use a context path such as `/movie/`, prepend it to the endpoint:
-
-```bash
-curl -s "http://localhost:9245/movie/rescan?full=1" | python3 -m json.tool
-```
-
-### Rescan UI
-
-The `Rescan` button in the header now opens a small action dialog instead of immediately starting an incremental scan.
-
-Available actions:
-
-- `Rescan`: incremental scan for new or changed files
-- `Full Scan`: clears saved scan state and forces full metadata revalidation
-- `Refresh Database`: clears the browser IndexedDB snapshot cache and reloads fresh catalog data from the server without starting a backend scan
-
-`Refresh Database` is useful when the backend index is already correct but the browser is still showing stale cached metadata.
-
-### Missing Mount Recovery
-
-If `mount_script` is configured and a media request hits a missing folder, the server will:
-
-1. detect that the parent folder does not exist
-2. invoke the configured mount script once
-3. re-check the target path
-4. return `Media folder is not mounted` with HTTP 404 only if the folder is still unavailable
-
-This recovery path is used for direct playback and the Plex-backed playback path. On the frontend, playback 404s are treated as terminal for that attempt, and the viewer shows a retry message instead of repeatedly hammering the server.
-
-## Frontend Development Notes
-
-The app currently loads `movies.js` directly from `index.html`, so frontend changes take effect without rebuilding `movies.min.js`.
-
-## Private Mode
-
-- private folders are hidden unless the device is authorized
-- unlock state is tied to a device id
-- approved devices are stored server-side
-- `passcode.py` can rotate the private-mode passcode and clear approvals
-
-Example:
-
-```bash
-python3 passcode.py mynewpasscode
-```
-
-## Generated Files
-
-These files are runtime-generated and should not be committed:
-
-- `movies_config.json`
-- `movies_state.json`
-- `movies_auth_state.json`
-- `movies_catalog_index.json`
-- `cache/`
-
-## Troubleshooting
-
-### UI Changes Do Not Appear
-
-- refresh the page normally first
-- if the JS bundle changed, confirm `index.html` references a new `movies.min.js?v=...` value
-
-### Direct Private Playback Fails
-
-- unlock private mode again so the `movies_device_id` cookie is refreshed
-
-### Plex Playback Fails but Direct Playback Works
-
-- verify the movies server host can reach `plex.base_url`
-- verify Plex is enabled in config
-- verify the configured token is valid
-
-### Direct Playback Fails but Plex Works
-
-- the container or codec is likely not safe for native browser playback on that device
-- keep Plex enabled for those files, or force the compatibility path through local transcode or Plex
-
-### Local Transcoding Does Not Work
-
-- verify `ffmpeg` and `ffprobe` are installed
-- verify `on_demand_transcode` is enabled
-- verify the source file is one of the currently supported source containers: `.mkv` or `.ts`
-
-## License
-
-This repository does not currently declare a software license. Add one explicitly if you plan to redistribute it.
+If you use `movies.min.js`, regenerate it after frontend changes.
