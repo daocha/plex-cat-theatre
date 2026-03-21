@@ -11,6 +11,7 @@ import logging
 import threading
 import time
 import uuid
+import unicodedata
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -38,6 +39,12 @@ class PlexAdapter:
         self._last_error: Optional[str] = None
         self._refreshing = False
         self._lock = threading.Lock()
+
+    def _normalize_match_text(self, value: str) -> str:
+        return unicodedata.normalize("NFC", str(value or "")).casefold()
+
+    def _normalize_match_path(self, value: str) -> str:
+        return self._normalize_match_text(str(Path(value).expanduser()))
 
     def status(self) -> dict:
         return {
@@ -80,87 +87,49 @@ class PlexAdapter:
 
             items: Dict[str, dict] = {}
             items_by_name_size: Dict[tuple[str, int], dict] = {}
+
+            def collect_videos(sec_xml: ET.Element):
+                for video in sec_xml.findall(".//Video"):
+                    title = video.attrib.get("title", "")
+                    rating_key = video.attrib.get("ratingKey", "")
+                    thumb = video.attrib.get("thumb", "")
+
+                    media = video.find("Media")
+                    if media is None:
+                        continue
+                    part = media.find("Part")
+                    if part is None:
+                        continue
+
+                    file_path = part.attrib.get("file", "")
+                    part_key = part.attrib.get("key", "")
+                    if not file_path:
+                        continue
+
+                    subtitle_key = self._pick_subtitle_key(part)
+                    norm_file = self._normalize_match_path(file_path)
+                    file_name = self._normalize_match_text(Path(file_path).name)
+                    try:
+                        part_size = int(part.attrib.get("size", "0") or 0)
+                    except Exception:
+                        part_size = 0
+                    item = {
+                        "title": title,
+                        "rating_key": rating_key,
+                        "thumb": thumb,
+                        "part_key": part_key,
+                        "subtitle_key": subtitle_key,
+                        "size": part_size,
+                        "file_name": file_name,
+                        "poster_ar": 0.0,
+                    }
+                    items[norm_file] = item
+                    if part_size > 0:
+                        items_by_name_size[(file_name, part_size)] = item
+
             for skey in section_keys:
-                # Query Movies (type=1)
-                sec_xml = self._get_xml(f"/library/sections/{skey}/all", {"type": "1"})
-                for video in sec_xml.findall(".//Video"):
-                    title = video.attrib.get("title", "")
-                    rating_key = video.attrib.get("ratingKey", "")
-                    thumb = video.attrib.get("thumb", "")
-
-                    media = video.find("Media")
-                    if media is None:
-                        continue
-                    part = media.find("Part")
-                    if part is None:
-                        continue
-
-                    file_path = part.attrib.get("file", "")
-                    part_key = part.attrib.get("key", "")
-                    if not file_path:
-                        continue
-
-                    subtitle_key = self._pick_subtitle_key(part)
-
-                    # Avoid expensive filesystem resolve() on large/offline mounts.
-                    norm_file = str(Path(file_path).expanduser())
-                    try:
-                        part_size = int(part.attrib.get("size", "0") or 0)
-                    except Exception:
-                        part_size = 0
-                    item = {
-                        "title": title,
-                        "rating_key": rating_key,
-                        "thumb": thumb,
-                        "part_key": part_key,
-                        "subtitle_key": subtitle_key,
-                        "size": part_size,
-                        "file_name": Path(file_path).name.lower(),
-                        "poster_ar": 0.0,
-                    }
-                    items[norm_file] = item
-                    if part_size > 0:
-                        items_by_name_size[(Path(file_path).name.lower(), part_size)] = item
-
-                # Query TV Show Episodes (type=4)
-                sec_xml = self._get_xml(f"/library/sections/{skey}/all", {"type": "4"})
-                for video in sec_xml.findall(".//Video"):
-                    title = video.attrib.get("title", "")
-                    rating_key = video.attrib.get("ratingKey", "")
-                    thumb = video.attrib.get("thumb", "")
-
-                    media = video.find("Media")
-                    if media is None:
-                        continue
-                    part = media.find("Part")
-                    if part is None:
-                        continue
-
-                    file_path = part.attrib.get("file", "")
-                    part_key = part.attrib.get("key", "")
-                    if not file_path:
-                        continue
-
-                    subtitle_key = self._pick_subtitle_key(part)
-
-                    norm_file = str(Path(file_path).expanduser())
-                    try:
-                        part_size = int(part.attrib.get("size", "0") or 0)
-                    except Exception:
-                        part_size = 0
-                    item = {
-                        "title": title,
-                        "rating_key": rating_key,
-                        "thumb": thumb,
-                        "part_key": part_key,
-                        "subtitle_key": subtitle_key,
-                        "size": part_size,
-                        "file_name": Path(file_path).name.lower(),
-                        "poster_ar": 0.0,
-                    }
-                    items[norm_file] = item
-                    if part_size > 0:
-                        items_by_name_size[(Path(file_path).name.lower(), part_size)] = item
+                sec_xml = self._get_xml(f"/library/sections/{skey}/all")
+                collect_videos(sec_xml)
 
             self._items_by_file = items
             self._items_by_name_size = items_by_name_size
@@ -206,7 +175,7 @@ class PlexAdapter:
         self.maybe_refresh()
         mapping: Dict[str, dict] = {}
         for vid, p in video_map.items():
-            key = str(p.expanduser())
+            key = self._normalize_match_path(str(p))
             item = self._items_by_file.get(key)
             if not item:
                 try:
@@ -214,7 +183,7 @@ class PlexAdapter:
                 except Exception:
                     sz = 0
                 if sz > 0:
-                    item = self._items_by_name_size.get((p.name.lower(), sz))
+                    item = self._items_by_name_size.get((self._normalize_match_text(p.name), sz))
             if item:
                 if item.get("thumb") and not float(item.get("poster_ar") or 0.0):
                     item["poster_ar"] = self._resolve_poster_ar(item)
@@ -272,7 +241,7 @@ class PlexAdapter:
         vp = self._catalog_video_map.get(video_id)
         if not vp:
             return None
-        key = str(vp.expanduser())
+        key = self._normalize_match_path(str(vp))
         p = self._items_by_file.get(key)
         if p:
             self._by_video_id[video_id] = p
@@ -282,7 +251,7 @@ class PlexAdapter:
         except Exception:
             sz = 0
         if sz > 0:
-            p = self._items_by_name_size.get((vp.name.lower(), sz))
+            p = self._items_by_name_size.get((self._normalize_match_text(vp.name), sz))
             if p:
                 self._by_video_id[video_id] = p
                 return p
