@@ -58,6 +58,7 @@ const EN_I18N = {
     openPlex: "Open Plex",
     searchVideos: "Search videos...",
     searchFolder: "Search folder...",
+    localeAuto: "Auto",
     allFolders: "All folders",
     androidTransition: "Android transition",
     transitionSnapshot: "Snapshot",
@@ -75,6 +76,7 @@ const EN_I18N = {
     backToTop: "Back to top",
     top: "Top",
     catLoading: "Cat is loading",
+    subtitleTraditionalChinese: "Chinese (Traditional)",
     slideshowOn: "Slideshow: On",
     slideshowOff: "Slideshow: Off",
     ccOn: "CC: On",
@@ -1828,7 +1830,7 @@ function syncLocaleSelectValue() {
 function updateLocaleButtonLabel() {
   if (!localeBtn || !localeSel) return;
   const selected = localeSel.options[localeSel.selectedIndex];
-  localeBtn.textContent = selected?.textContent || "Auto";
+  localeBtn.textContent = selected?.textContent || tr("localeAuto");
 }
 
 function renderLocaleOptions() {
@@ -1926,7 +1928,7 @@ async function applyLocale() {
   setAttr("privateToggle", "aria-label", "privateMode");
   if (localeSel) {
     const autoOption = localeSel.querySelector('option[value="auto"]');
-    if (autoOption) autoOption.textContent = "Auto";
+    if (autoOption) autoOption.textContent = tr("localeAuto");
   }
   updateLocaleButtonLabel();
   renderLocaleOptions();
@@ -2155,7 +2157,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
       if (!isActiveSession()) return;
       const track = document.createElement("track");
       track.kind = "subtitles";
-      track.label = "Chinese (Traditional)";
+      track.label = tr("subtitleTraditionalChinese");
       track.srclang = "zh-TW";
       track.src = trackSrc;
       track.default = true;
