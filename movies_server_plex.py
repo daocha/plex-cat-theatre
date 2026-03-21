@@ -40,6 +40,18 @@ class PlexAdapter:
         self._refreshing = False
         self._lock = threading.Lock()
 
+    def _pick_poster_key(self, video: ET.Element) -> str:
+        kind = str(video.attrib.get("type", "") or "").strip().lower()
+        if kind == "episode":
+            keys = ("thumb", "art")
+        else:
+            keys = ("thumb", "parentThumb", "grandparentThumb", "art", "parentArt", "grandparentArt")
+        for key in keys:
+            value = str(video.attrib.get(key, "") or "").strip()
+            if value:
+                return value
+        return ""
+
     def _normalize_match_text(self, value: str) -> str:
         return unicodedata.normalize("NFC", str(value or "")).casefold()
 
@@ -92,7 +104,7 @@ class PlexAdapter:
                 for video in sec_xml.findall(".//Video"):
                     title = video.attrib.get("title", "")
                     rating_key = video.attrib.get("ratingKey", "")
-                    thumb = video.attrib.get("thumb", "")
+                    poster_key = self._pick_poster_key(video)
 
                     media = video.find("Media")
                     if media is None:
@@ -116,7 +128,7 @@ class PlexAdapter:
                     item = {
                         "title": title,
                         "rating_key": rating_key,
-                        "thumb": thumb,
+                        "thumb": poster_key,
                         "part_key": part_key,
                         "subtitle_key": subtitle_key,
                         "size": part_size,
@@ -128,8 +140,19 @@ class PlexAdapter:
                         items_by_name_size[(file_name, part_size)] = item
 
             for skey in section_keys:
-                sec_xml = self._get_xml(f"/library/sections/{skey}/all")
-                collect_videos(sec_xml)
+                seen_types = set()
+                for media_type in ("1", "4"):
+                    if media_type in seen_types:
+                        continue
+                    seen_types.add(media_type)
+                    try:
+                        sec_xml = self._get_xml(
+                            f"/library/sections/{skey}/all",
+                            {"type": media_type},
+                        )
+                    except Exception:
+                        continue
+                    collect_videos(sec_xml)
 
             self._items_by_file = items
             self._items_by_name_size = items_by_name_size
@@ -269,7 +292,7 @@ class PlexAdapter:
         if not rating_key:
             return None
 
-        session = session_id or f"miranda-{uuid.uuid4().hex[:12]}"
+        session = session_id or f"cat_theetre-{uuid.uuid4().hex[:12]}"
         params = {
             "path": self._build_url(f"/library/metadata/{rating_key}"),
             "mediaIndex": "0",
@@ -281,12 +304,12 @@ class PlexAdapter:
             "audioCodec": "aac",
             "maxAudioChannels": "2",
             "session": session,
-            "X-Plex-Product": "MirandaMovies",
-            "X-Plex-Client-Identifier": "miranda-movies-web",
+            "X-Plex-Product": "CatTheatreMovies",
+            "X-Plex-Client-Identifier": "cat-theatre-web",
             "X-Plex-Platform": "Chrome",
             "X-Plex-Platform-Version": "1.0",
             "X-Plex-Device": "Web",
-            "X-Plex-Device-Name": "Miranda Browser",
+            "X-Plex-Device-Name": "Cat Theatre Browser",
         }
         return self._build_url("/video/:/transcode/universal/start.m3u8", params)
 
