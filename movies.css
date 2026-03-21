@@ -71,6 +71,9 @@ button{cursor:pointer}
 .debug-corner.visible{display:inline-flex}
 #toTopBtn{position:fixed;right:14px;bottom:14px;z-index:210;display:none;padding:8px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-size:12px;line-height:1;box-shadow:0 8px 18px rgba(0,0,0,.28)}
 #toTopBtn.show{display:inline-flex;align-items:center;justify-content:center}
+.toast{position:fixed;top:14px;right:14px;z-index:260;display:none;max-width:min(360px,calc(100vw - 28px));padding:12px 14px;border-radius:12px;border:1px solid var(--danger-line);background:var(--danger-bg);color:var(--fg);box-shadow:0 14px 30px rgba(0,0,0,.28);font-size:13px;line-height:1.45}
+.toast.on{display:block;animation:toast-in .18s ease-out}
+@keyframes toast-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 body[data-theme="neo-dark"] #toTopBtn{border-color:#3f4f86;background:#1d2540;color:#dfe8ff}
 body[data-theme="graphite"] #toTopBtn{border-color:#4b515c;background:#2a2f36;color:#eef2f7}
 body[data-theme="ivory-noir"] #toTopBtn{border-color:#8fa2d7;background:#f5f7ff;color:#2a3557;box-shadow:0 8px 16px rgba(35,48,90,.2)}

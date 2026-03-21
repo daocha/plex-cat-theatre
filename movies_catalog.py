@@ -856,6 +856,7 @@ class Catalog:
                         "folder": str(row.get("folder", "")),
                         "size": str(row.get("size", "")),
                         "ar": float(row.get("ar", 1.6) or 1.6),
+                        "audio_codecs": list(audio_codes),
                         "video_url": f"/video/{video_id}",
                         "thumb_url": str(row.get("thumb_url", "/thumbs/placeholder.jpg"))
                         or "/thumbs/placeholder.jpg",
@@ -1049,7 +1050,7 @@ class Catalog:
             current_stage="subtitle",
         )
         subtitle_path = self._resolve_sidecar_subtitle(video_path)
-        if video_path.suffix.lower() in DIRECT_AUDIO_EXTENSIONS:
+        if video_path.suffix.lower() in VIDEO_EXTENSIONS or video_path.suffix.lower() in SOURCE_EXTENSIONS:
             self._update_scan_progress(
                 current_path=str(video_path),
                 current_stage="audio",
