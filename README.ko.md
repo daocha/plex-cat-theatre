@@ -132,8 +132,9 @@ http://localhost:9245
 - `private_folder`: 비공개로 취급할 폴더 프리픽스
 - `private_passcode`: 비공개 모드 비밀번호 해시
 - `mount_script`: 재생 중 누락된 미디어 폴더를 만났을 때 호출할 선택적 명령
+- `transcode`: `.mkv`, `.ts` 같은 소스 컨테이너에 대해 카탈로그 측 백그라운드 트랜스코드 워커를 활성화하며, 이는 미디어 라이브러리 옆에 별도의 트랜스코드 산출 파일을 만들 수 있으므로 보통 `false`로 두는 것이 좋고 Plex 통합 시에는 특히 그렇습니다
 - `auto_scan_on_start`: 시작 시 미디어 다시 스캔
-- `on_demand_transcode`: 소스 컨테이너에 대한 내장 트랜스코딩 활성화
+- `on_demand_transcode`: 플레이어 런타임 중 소스 컨테이너에 대한 트랜스코딩을 활성화하며, 가능하면 하드웨어 인코딩을 우선 사용하고 필요 시 소프트웨어 인코딩으로 폴백합니다
 - `on_demand_hls`: 소스 컨테이너에 대한 내장 HLS 플레이리스트 활성화
 - `enable_plex_server`: Plex 통합 활성화
 - `plex.base_url`: Plex 서버 기본 URL

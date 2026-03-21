@@ -132,8 +132,9 @@ Die Beispielkonfiguration ist absichtlich bereinigt und enthält nicht:
 - `private_folder`: Ordnerpräfixe, die als privat behandelt werden
 - `private_passcode`: Passcode-Hash für den Privatmodus
 - `mount_script`: optionaler Befehl, der aufgerufen wird, wenn bei der Wiedergabe ein Medienordner fehlt
+- `transcode`: aktiviert den katalogseitigen Hintergrund-Transcode-Worker für Quellcontainer wie `.mkv` und `.ts`; dabei können separate transkodierte Sidecar-Dateien neben der Medienbibliothek erzeugt werden, deshalb sollte dies normalerweise auf `false` bleiben, insbesondere wenn Plex-Integration aktiviert ist
 - `auto_scan_on_start`: Medien beim Start erneut scannen
-- `on_demand_transcode`: eingebautes Transcoding für Quellcontainer aktivieren
+- `on_demand_transcode`: Laufzeit-Transcoding im Player für Quellcontainer aktivieren, wobei nach Möglichkeit Hardware-Encoding verwendet und sonst auf Software-Encoding zurückgefallen wird
 - `on_demand_hls`: eingebaute HLS-Playlists für Quellcontainer aktivieren
 - `enable_plex_server`: Plex-Integration aktivieren
 - `plex.base_url`: Basis-URL des Plex-Servers
