@@ -1,0 +1,15 @@
+{
+  "forbidden_private": "Privates Medium ist gesperrt.",
+  "missing_device_id": "Geräte-ID fehlt.",
+  "too_many_attempts": "Zu viele Versuche. Bitte später erneut versuchen.",
+  "invalid_passcode": "Falscher Passcode.",
+  "scan_in_progress": "Ein Scan läuft bereits.",
+  "subtitle_not_found": "Untertitel nicht gefunden",
+  "media_folder_not_mounted": "Medienordner ist nicht eingehängt",
+  "file_not_found": "Datei nicht gefunden",
+  "hls_not_enabled": "HLS ist für diese Datei nicht aktiviert",
+  "ffmpeg_not_found": "ffmpeg nicht gefunden",
+  "not_found": "Nicht gefunden",
+  "bad_request": "Ungültige Anfrage",
+  "forbidden": "Verboten"
+}

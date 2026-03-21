@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import math
 import mimetypes
@@ -76,11 +77,28 @@ cfg_runtime = {
     "mount_script": "",
     "plex_enabled": False,
     "plex_base_url": "",
+    "locale": "auto",
 }
 APPROVED_PRIVATE_DEVICES: set[str] = set()
 PRIVATE_STATE_LOCK = threading.Lock()
 AUTH_STATE_LOCK = threading.Lock()
 AUTH_FAILURES: dict = {}
+DEFAULT_LOCALE = "en"
+SUPPORTED_LOCALES = {
+    "en",
+    "zh-CN",
+    "zh-HK",
+    "zh-TW",
+    "fr",
+    "ko",
+    "ja",
+    "de",
+    "th",
+    "vi",
+    "nl",
+}
+SERVER_LOCALE_DIR = Path(__file__).with_name("server_locales")
+SERVER_LOCALE_CACHE: dict[str, dict[str, str]] = {}
 
 
 @app.after_request
@@ -135,7 +153,78 @@ def require_media_access(video_id: str) -> tuple[bool, tuple]:
     ).strip()
     if can_access_private(device_id, passcode=passcode):
         return True, (None, None)
-    return False, (jsonify({"error": "forbidden_private"}), 403)
+    return False, localized_json_error("forbidden_private", 403)
+
+
+def normalize_locale_code(value: str) -> str:
+    raw = str(value or "").strip().replace("_", "-")
+    if not raw:
+        return ""
+    if raw in SUPPORTED_LOCALES:
+        return raw
+    lowered = raw.lower()
+    if lowered in {"zh", "zh-hans", "zh-sg", "zh-my"}:
+        return "zh-CN"
+    if lowered in {"zh-hant"}:
+        return "zh-TW"
+    parts = raw.split("-")
+    base = parts[0].lower()
+    if base == "zh":
+        region = (parts[1] if len(parts) > 1 else "").lower()
+        if region in {"hk", "mo"}:
+            return "zh-HK"
+        if region in {"tw", "hant"}:
+            return "zh-TW"
+        return "zh-CN"
+    for supported in SUPPORTED_LOCALES:
+        if supported.lower() == base:
+            return supported
+    return ""
+
+
+def request_locale() -> str:
+    requested = normalize_locale_code(str(request.headers.get("X-UI-Locale", "") or ""))
+    if requested:
+        return requested
+    configured = normalize_locale_code(str(cfg_runtime.get("locale", "") or ""))
+    if configured and configured != "auto":
+        return configured
+    accept = str(request.headers.get("Accept-Language", "") or "")
+    for chunk in accept.split(","):
+        code = normalize_locale_code(chunk.split(";", 1)[0])
+        if code:
+            return code
+    return DEFAULT_LOCALE
+
+
+def load_server_locale_bundle(locale: str) -> dict[str, str]:
+    normalized = normalize_locale_code(locale) or DEFAULT_LOCALE
+    cached = SERVER_LOCALE_CACHE.get(normalized)
+    if cached is not None:
+        return cached
+    path = SERVER_LOCALE_DIR / f"{normalized}.json"
+    try:
+        bundle = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        if normalized != DEFAULT_LOCALE:
+            bundle = load_server_locale_bundle(DEFAULT_LOCALE)
+        else:
+            bundle = {}
+    SERVER_LOCALE_CACHE[normalized] = bundle
+    return bundle
+
+
+def localized_message(message_key: str) -> str:
+    locale = request_locale()
+    table = load_server_locale_bundle(locale)
+    fallback = load_server_locale_bundle(DEFAULT_LOCALE)
+    return table.get(message_key, fallback.get(message_key, message_key))
+
+
+def localized_json_error(error_key: str, status: int, **extra):
+    payload = {"error": error_key, "message": localized_message(error_key)}
+    payload.update(extra)
+    return jsonify(payload), status
 
 
 def build_plex_hls_proxy_url(
@@ -216,8 +305,8 @@ def ensure_media_path_ready(media_path: Path | None) -> tuple[Path | None, tuple
             return media_path, None
         folder_missing = bool(folder and not folder.exists())
     if folder_missing:
-        return None, ("Media folder is not mounted", 404)
-    return None, ("File not found", 404)
+        return None, (localized_message("media_folder_not_mounted"), 404)
+    return None, (localized_message("file_not_found"), 404)
 
 
 def ensure_media_id_ready(video_id: str) -> tuple[Path | None, tuple[str, int] | None]:
@@ -407,6 +496,15 @@ def static_movies_min_js():
     )
 
 
+@app.route("/locales/<path:fname>")
+def static_locale_js(fname):
+    safe_name = Path(fname).name
+    return send_file(
+        Path(__file__).with_name("locales") / safe_name,
+        mimetype="application/javascript; charset=utf-8",
+    )
+
+
 @app.route("/plex.svg")
 def static_plex_logo():
     return send_file(
@@ -425,19 +523,23 @@ def api_private_unlock():
     ).strip()
     device_id = extract_device_id(data)
     if not device_id:
-        return jsonify({"error": "missing_device_id"}), 400
+        return localized_json_error("missing_device_id", 400)
 
     identity = client_identity(data)
     with AUTH_STATE_LOCK:
         locked, retry_after = is_unlock_locked(AUTH_FAILURES, identity)
         if locked:
-            return jsonify({"error": "too_many_attempts", "retry_after": retry_after}), 429
+            return localized_json_error(
+                "too_many_attempts",
+                429,
+                retry_after=retry_after,
+            )
 
     if not verify_passcode(passcode, catalog.private_passcode):
         with AUTH_STATE_LOCK:
             register_unlock_failure(AUTH_FAILURES, identity)
             save_auth_state(AUTH_STATE_PATH, AUTH_FAILURES)
-        return jsonify({"error": "invalid_passcode"}), 403
+        return localized_json_error("invalid_passcode", 403)
 
     with AUTH_STATE_LOCK:
         clear_unlock_failures(AUTH_FAILURES, identity)
@@ -621,6 +723,8 @@ def api_config():
             "direct_audio_whitelist": sorted(whitelist),
             "plex_enabled": bool(cfg_runtime.get("plex_enabled", False)),
             "plex_base_url": str(cfg_runtime.get("plex_base_url", "") or "").strip(),
+            "locale": str(cfg_runtime.get("locale", "auto") or "auto"),
+            "supported_locales": sorted(SUPPORTED_LOCALES),
         }
     )
 
@@ -630,7 +734,13 @@ def rescan():
     force_full = parse_bool(request.args.get("full", "0"))
     with catalog._lock:
         if catalog.is_scanning:
-            return jsonify({"ok": False, "reason": "scan_in_progress"}), 202
+            return jsonify(
+                {
+                    "ok": False,
+                    "reason": "scan_in_progress",
+                    "message": localized_message("scan_in_progress"),
+                }
+            ), 202
         catalog.is_scanning = True
 
     def reload_and_scan():
@@ -709,7 +819,7 @@ def subtitle(sid):
     subtitle_path = catalog.subtitle_map.get(urllib.parse.unquote(sid))
     if subtitle_path and subtitle_path.exists():
         return send_file(subtitle_path, mimetype="text/vtt")
-    return "Subtitle not found", 404
+    return localized_message("subtitle_not_found"), 404
 
 
 @app.route("/hls/<vid>/index.m3u8")
@@ -721,7 +831,7 @@ def hls_playlist(vid):
     if err:
         return err
     if not ON_DEMAND_TRANSCODE or video_path.suffix.lower() not in SOURCE_EXTENSIONS:
-        return "HLS not enabled for this file", 400
+        return localized_message("hls_not_enabled"), 400
 
     segment_length = 2
     duration = catalog._probe_duration(video_path) or 0.0
@@ -757,9 +867,9 @@ def hls_segment(vid, seq):
     if err:
         return err
     if not ON_DEMAND_TRANSCODE or video_path.suffix.lower() not in SOURCE_EXTENSIONS:
-        return "HLS not enabled for this file", 400
+        return localized_message("hls_not_enabled"), 400
     if not FFMPEG:
-        return "ffmpeg not found", 500
+        return localized_message("ffmpeg_not_found"), 500
 
     segment_length = 2
     start = max(0, int(seq)) * segment_length
@@ -897,14 +1007,14 @@ def plex_subtitle(vid):
     if not ok:
         return deny
     if not plex_adapter or not plex_adapter.enabled:
-        return "Subtitle not found", 404
+        return localized_message("subtitle_not_found"), 404
     try:
         plex_adapter.bind_catalog(catalog.video_map)
     except Exception:
         pass
     resp, err = plex_adapter.proxy_binary_by_kind(urllib.parse.unquote(vid), "subtitle")
     if not resp:
-        return "Subtitle not found", 404
+        return localized_message("subtitle_not_found"), 404
     try:
         body = resp.read()
         ctype = resp.headers.get("Content-Type", "text/vtt")
@@ -928,7 +1038,7 @@ def plex_video(vid):
     if not ok:
         return deny
     if not plex_adapter or not plex_adapter.enabled:
-        return "Not found", 404
+        return localized_message("not_found"), 404
     video_path, err = ensure_media_id_ready(vid)
     if err:
         return err
@@ -946,7 +1056,7 @@ def plex_video(vid):
         except Exception:
             playlist_url = None
     if not playlist_url:
-        return "Not found", 404
+        return localized_message("not_found"), 404
 
     try:
         with plex_adapter.open_absolute(
@@ -955,7 +1065,7 @@ def plex_video(vid):
         ) as resp:
             body = resp.read().decode("utf-8", errors="ignore")
     except Exception:
-        return "Not found", 404
+        return localized_message("not_found"), 404
 
     mount_root = resolve_app_root()
     base = playlist_url.rsplit("/", 1)[0] + "/"
@@ -985,16 +1095,16 @@ def plex_video(vid):
 def plex_hls_proxy():
     raw = str(request.args.get("u", "") or "").strip()
     if not raw:
-        return "Bad request", 400
+        return localized_message("bad_request"), 400
     mount_root = normalize_mount_prefix(request.args.get("root", "") or "") or resolve_app_root()
     try:
         target = urllib.parse.unquote(raw)
         parsed = urllib.parse.urlparse(target)
         if parsed.scheme not in {"http", "https"}:
-            return "Bad request", 400
+            return localized_message("bad_request"), 400
         base = urllib.parse.urlparse(plex_adapter.base_url if plex_adapter else "")
         if not base.netloc or parsed.netloc != base.netloc:
-            return "Forbidden", 403
+            return localized_message("forbidden"), 403
         if plex_adapter and plex_adapter.token:
             query_pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
             if not any(key == "X-Plex-Token" for key, _ in query_pairs):
@@ -1003,7 +1113,7 @@ def plex_hls_proxy():
                     parsed._replace(query=urllib.parse.urlencode(query_pairs))
                 )
     except Exception:
-        return "Bad request", 400
+        return localized_message("bad_request"), 400
 
     upstream_headers = {}
     for header_name in (
@@ -1031,7 +1141,7 @@ def plex_hls_proxy():
             referer_video_id = extract_video_id_from_referer(request.headers.get("Referer", ""))
             if referer_video_id:
                 _, err = ensure_media_id_ready(referer_video_id)
-                if err and err[0] == "Media folder is not mounted":
+                if err and err[0] == localized_message("media_folder_not_mounted"):
                     return err
                 try:
                     upstream = (
@@ -1048,7 +1158,7 @@ def plex_hls_proxy():
     except Exception:
         upstream = None
     if not upstream:
-        return "Not found", 404
+        return localized_message("not_found"), 404
 
     ctype = upstream.headers.get("Content-Type", "application/octet-stream")
     upstream_status = int(
@@ -1324,6 +1434,7 @@ class App:
         cfg_runtime["mount_script"] = str(cfg.get("mount_script", "") or "").strip()
         cfg_runtime["plex_enabled"] = plex_enabled
         cfg_runtime["plex_base_url"] = str(plex_cfg.get("base_url", "") or "").strip()
+        cfg_runtime["locale"] = str(cfg.get("locale", "auto") or "auto").strip() or "auto"
         plex_adapter = PlexAdapter(
             enabled=plex_enabled,
             plex_cfg=plex_cfg,

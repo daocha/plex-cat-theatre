@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta
       name="viewport"
       content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=yes,viewport-fit=cover"
     />
-    <title>Miranda Cat Theatre</title>
+    <title>Cat Theatre</title>
     <link rel="stylesheet" href="movies.css?v=20260318-1202" />
   </head>
   <body>
@@ -27,9 +27,29 @@
               <img src="plex.svg" alt="" aria-hidden="true" />
             </a>
           </span>
-          <span>Cat Theatre</span>
+          <span id="brandTitle">Cat Theatre</span>
         </h1>
         <div class="top">
+          <div id="localePicker" class="locale-picker">
+            <button id="localeBtn" type="button" class="locale-btn">English</button>
+            <div id="localePanel" class="locale-panel" style="display: none">
+              <div id="localeOptions" class="locale-options"></div>
+            </div>
+            <select id="localeSel" style="display: none">
+              <option value="auto">Auto</option>
+              <option value="en">English</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="zh-HK">繁體中文（香港）</option>
+              <option value="zh-TW">繁體中文（台灣）</option>
+              <option value="fr">Français</option>
+              <option value="ko">한국어</option>
+              <option value="ja">日本語</option>
+              <option value="de">Deutsch</option>
+              <option value="th">ไทย</option>
+              <option value="vi">Tiếng Việt</option>
+              <option value="nl">Nederlands</option>
+            </select>
+          </div>
           <input id="q" placeholder="Search videos..." />
           <div id="folder" class="folder-picker">
             <button id="folderBtn" type="button" class="folder-btn">
@@ -58,7 +78,9 @@
                 class="theme-transition"
                 style="display: none"
               >
-                <div class="theme-transition-label">Android transition</div>
+                <div id="transitionLabel" class="theme-transition-label">
+                  Android transition
+                </div>
                 <div class="theme-transition-row">
                   <button
                     id="transitionSnapshot"
@@ -129,7 +151,7 @@
       <div id="scrollSentinel" style="height: 1px; width: 100%"></div>
     </main>
     <div id="debugPanel" class="debug-panel">
-      <div class="debug-header">Debug</div>
+      <div id="debugHeader" class="debug-header">Debug</div>
       <pre id="debugOutput">Waiting for config...</pre>
     </div>
     <button
@@ -146,7 +168,9 @@
     <div id="preloadOverlay" class="preload-overlay" aria-hidden="true">
       <div class="vloader on">
         <div class="cat">🐈‍⬛</div>
-        <div class="txt">Cat is loading<span class="dots"></span></div>
+        <div id="preloadText" class="txt">
+          Cat is loading<span class="dots"></span>
+        </div>
       </div>
     </div>
     <div id="modal" class="modal" aria-hidden="true">
@@ -172,27 +196,32 @@
                 role="presentation"
                 aria-hidden="true"
               />
-              <span class="sr-only">Plex playback</span>
+              <span id="plexSrText" class="sr-only">Plex playback</span>
             </button>
             <button id="mclose" class="close" type="button">Close</button>
           </div>
         </div>
         <div id="vloader" class="vloader">
           <div class="cat">🐈‍⬛</div>
-          <div class="txt">Cat is loading<span class="dots"></span></div>
+          <div id="modalLoaderText" class="txt">
+            Cat is loading<span class="dots"></span>
+          </div>
         </div>
         <video id="mvideo" controls playsinline></video>
       </div>
     </div>
     <div id="pmodal" class="pmodal" aria-hidden="true">
       <div
+        id="privateDialog"
         class="card"
         role="dialog"
         aria-modal="true"
-        aria-label="私密模式驗證"
+        aria-label="Private mode verification"
       >
-        <div style="font-weight: 700">Enter private passcode</div>
-        <div class="hint">Unlock private folders</div>
+        <div id="privateDialogTitle" style="font-weight: 700">
+          Enter private passcode
+        </div>
+        <div id="privateDialogHint" class="hint">Unlock private folders</div>
         <input
           id="ppass"
           type="password"
@@ -206,7 +235,13 @@
       </div>
     </div>
     <div id="emodal" class="emodal" aria-hidden="true">
-      <div class="card" role="dialog" aria-modal="true" aria-label="錯誤提示">
+      <div
+        id="errorDialog"
+        class="card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Error"
+      >
         <div id="etitle" class="title">Authentication failed</div>
         <div id="emsg" class="msg">Passcode 錯誤</div>
         <div class="row" style="margin-top: 12px">
@@ -222,13 +257,14 @@
     </div>
     <div id="scanModal" class="scanmodal" aria-hidden="true">
       <div
+        id="scanDialog"
         class="card"
         role="dialog"
         aria-modal="true"
         aria-label="Scan actions"
       >
-        <div class="title">Scan Actions</div>
-        <div class="hint">
+        <div id="scanTitle" class="title">Scan Actions</div>
+        <div id="scanHint" class="hint">
           Choose what to do with the movie catalog and browser snapshot cache.
         </div>
         <div class="scan-actions">
@@ -236,19 +272,25 @@
             <button id="scanRescan" class="btn-primary" type="button">
               Rescan
             </button>
-            <div class="desc">Quick scan for new or changed files.</div>
+            <div id="scanRescanDesc" class="desc">
+              Quick scan for new or changed files.
+            </div>
           </div>
           <div class="scan-action-item">
             <button id="scanFull" class="btn-primary" type="button">
               Full Scan
             </button>
-            <div class="desc">Rebuild scan metadata for the whole library.</div>
+            <div id="scanFullDesc" class="desc">
+              Rebuild scan metadata for the whole library.
+            </div>
           </div>
           <div class="scan-action-item">
             <button id="scanRefreshDb" class="btn-muted" type="button">
               Refresh Database
             </button>
-            <div class="desc">Clear browser cache and reload from server.</div>
+            <div id="scanRefreshDbDesc" class="desc">
+              Clear browser cache and reload from server.
+            </div>
           </div>
         </div>
         <div class="row">
