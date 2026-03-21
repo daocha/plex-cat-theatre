@@ -1,18 +1,66 @@
-# Cat Theatre filmserver
+# Cat Theatre Movies Server
 
-> Lichte self-hosted filmbrowser en streamingserver op basis van Flask, Waitress en `ffmpeg`.
+> Zelfgehoste filmblader- en streamingserver gebouwd met Flask, Waitress en `ffmpeg`, met optionele Plex-integratie voor compatibiliteitsgerichte weergave.
 
-[English](./README.md)
+**Talen**
+
+[English](./README.md) | `Nederlands`
 
 ---
 
-## Belangrijkste functies
+## Overzicht
 
-- bibliotheekscan over meerdere roots
-- thumbnails en previewframes
-- privé-mappen met apparaatgebaseerde ontgrendeling
-- direct afspelen, lokale transcodering of Plex-weergave
-- ondersteuning voor reverse-proxy-prefixen zoals `/movie/`
+Cat Theatre is bewust lichtgewicht:
+
+- klein Python-afhankelijkheidsoppervlak
+- geen database nodig
+- bestandssysteemgerichte catalogus
+- draagbare polling-scan
+- Plex blijft optioneel
+
+Geschikt voor:
+
+- lokale mediabibliotheken over meerdere mappen
+- generatie van miniaturen en previews
+- apparaatgebonden private mappen
+- reverse-proxy-uitrol onder een prefix zoals `/movie/`
+- direct play, lokale transcodering en Plex HLS
+
+---
+
+## Functies
+
+- scan met meerdere roots
+- poster-miniaturen en previewframes
+- private mappen
+- native direct play
+- lokale transcodering voor `.mkv` en `.ts`
+- Plex-integratie
+- ondersteuning voor reverse-proxy-subpaden
+- browserbeeldcache en IndexedDB-metadatacache
+
+---
+
+## Projectstructuur
+
+- `movies_server.py`
+- `movies_server_core.py`
+- `movies_catalog.py`
+- `movies_server_plex.py`
+- `movies.js`
+- `movies.min.js`
+- `movies.css`
+- `passcode.py`
+
+---
+
+## Vereisten
+
+```bash
+pip install -r requirements.txt
+which ffmpeg
+which ffprobe
+```
 
 ---
 
@@ -31,43 +79,61 @@ http://localhost:9245
 
 ---
 
-## Belangrijke configuratie
+## Configuratie
+
+Belangrijke velden:
 
 - `root`
 - `thumbs_dir`
 - `private_folder`
 - `private_passcode`
 - `mount_script`
+- `auto_scan_on_start`
+- `on_demand_transcode`
+- `on_demand_hls`
 - `enable_plex_server`
-- `direct_playback`
 - `plex.base_url`
 - `plex.token`
+- `debug_enabled`
+- `direct_playback`
 
 ---
 
 ## Afspeelmodi
 
-### Direct afspelen
+- direct play: `/video/<id>`
+- lokale transcodering: `/hls/<id>/index.m3u8` of `/video/<id>?fmp4=1`
+- Plex-weergave: Plex maakt HLS, deze app proxyt het
 
-- geschikt voor `.mp4`, `.m4v`, `.webm`
-- route: `/video/<id>`
+### Standaard afspeellogica
 
-### Lokale transcodering
-
-- HLS: `/hls/<id>/index.m3u8`
-- fMP4: `/video/<id>?fmp4=1`
-
-### Plex
-
-- Plex HLS
-- Plex-posters
-- Plex-ondertitels
+- `Direct` heeft de voorkeur voor `.mp4`, `.m4v`, `.webm` en `.avi` wanneer de directe URL naar een echt bestand wijst en de audiocodecs binnen de whitelist vallen
+- als audiometadata ontbreekt voor deze browserveilige extensies, kiest de app nog steeds voor `Direct`
+- `Plex` heeft de voorkeur voor `.mkv`, `.ts`, directe HLS/fMP4-URL's en bestanden waarvan bekende audiocodecs buiten de whitelist vallen
+- als er geen Plex-match is, valt de app terug op `Direct`
 
 ---
 
-## Controlecommando's
+## Cache en scan
 
-```bash
-python3 -m py_compile movies_server.py movies_server_core.py movies_server_plex.py movies_catalog.py
-node --check movies.js
-```
+- langdurige afbeeldingscache
+- IndexedDB-snapshots met TTL van 1 dag
+- maximaal 8 snapshots
+- ongeveer 18 MB limiet
+- `/rescan?full=1` forceert volledige hercontrole
+
+---
+
+## Privémodus en debug
+
+- private mappen zijn standaard verborgen
+- ontgrendeling is apparaatgebaseerd
+- `passcode.py` kan de passcode vervangen
+- `debug_enabled` toont de debug-overlay
+
+---
+
+## Problemen oplossen
+
+- controleer bij Plex-problemen `plex.base_url` en token
+- controleer bij lokale transcodering `ffmpeg`, `ffprobe` en `on_demand_transcode`
