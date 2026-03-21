@@ -132,8 +132,9 @@ http://localhost:9245
 - `private_folder`：視為私密的資料夾前綴
 - `private_passcode`：私密模式密碼雜湊
 - `mount_script`：播放遇到遺失媒體資料夾時可呼叫的掛載腳本
+- `transcode`：為 `.mkv`、`.ts` 等來源容器啟用目錄掃描端的背景轉碼工作程序；這可能會在媒體庫旁邊產生額外的轉碼檔案，因此通常建議保持為 `false`，尤其在啟用 Plex 整合時
 - `auto_scan_on_start`：啟動時重新掃描媒體
-- `on_demand_transcode`：為來源容器啟用內建轉碼
+- `on_demand_transcode`：為播放器執行期間啟用來源容器轉碼，可優先使用硬體編碼，不可用時再回退到軟體編碼
 - `on_demand_hls`：為來源容器啟用內建 HLS 播放清單
 - `enable_plex_server`：啟用 Plex 整合
 - `plex.base_url`：Plex 伺服器基底 URL
