@@ -37,6 +37,206 @@ function getBasePath() {
   return normalizeBasePath(window.location.pathname || "/");
 }
 const BASE_PATH = getBasePath();
+const DEFAULT_LOCALE = "en";
+const SUPPORTED_LOCALES = [
+  "en",
+  "zh-CN",
+  "zh-HK",
+  "zh-TW",
+  "fr",
+  "ko",
+  "ja",
+  "de",
+  "th",
+  "vi",
+  "nl",
+];
+const LOCALE_STORAGE_KEY = "movies_locale";
+const EN_I18N = {
+    appTitle: "Cat Theatre",
+    openPlex: "Open Plex",
+    searchVideos: "Search videos...",
+    searchFolder: "Search folder...",
+    allFolders: "All folders",
+    androidTransition: "Android transition",
+    transitionSnapshot: "Snapshot",
+    transitionClassic: "Classic",
+    transitionSnapshotFull: "Transition: Snapshot",
+    transitionClassicFull: "Transition: Classic",
+    rescan: "Rescan",
+    fullScan: "Full Scan",
+    refreshDatabase: "Refresh Database",
+    rescanMenuTitle: "Open scan actions: Rescan, Full Scan, or Refresh Database",
+    privateMode: "Private mode",
+    debug: "Debug",
+    waitingForConfig: "Waiting for config...",
+    showDebugPanel: "Show debug panel",
+    backToTop: "Back to top",
+    top: "Top",
+    catLoading: "Cat is loading",
+    slideshowOn: "Slideshow: On",
+    slideshowOff: "Slideshow: Off",
+    ccOn: "CC: On",
+    ccOff: "CC: Off",
+    togglePlaybackMode: "Toggle Plex/direct playback",
+    plexPlayback: "Plex playback",
+    close: "Close",
+    privateModeVerification: "Private mode verification",
+    enterPrivatePasscode: "Enter private passcode",
+    unlockPrivateFolders: "Unlock private folders",
+    passcode: "Passcode",
+    cancel: "Cancel",
+    unlock: "Unlock",
+    error: "Error",
+    authenticationFailed: "Authentication failed",
+    wrongPasscode: "Wrong passcode",
+    ok: "OK",
+    scanActions: "Scan Actions",
+    scanActionsHint: "Choose what to do with the movie catalog and browser snapshot cache.",
+    scanRescanDesc: "Quick scan for new or changed files.",
+    scanFullDesc: "Rebuild scan metadata for the whole library.",
+    scanRefreshDbDesc: "Clear browser cache and reload from server.",
+    loadedTotal: "Loaded {loaded} / Total {total}",
+    libraryNotReady: "Library not ready. Waiting for mounted disks: {roots}",
+    privateModeOn: "Private Mode: On",
+    privateModeOff: "Private Mode: Off",
+    play: "Play",
+    playbackFailed: "Playback failed",
+    playbackFileNotFound: "File not found. The drive may be unmounted or sleeping. Please retry.",
+    defaultLabel: "default",
+    playbackLabel: "playback",
+    whitelistLabel: "whitelist",
+    videoLabel: "video",
+    candidateLabel: "candidate",
+    scanLabel: "scan",
+    entriesLabel: "entries",
+    videosLabel: "videos",
+    unknown: "unknown",
+    idle: "idle",
+    none: "none",
+    notApplicable: "n/a",
+    plexPlaybackForced: "Plex playback (forced)",
+    directPlaybackForced: "Direct playback (forced)",
+    plexPlaybackAuto: "Plex playback (auto)",
+    directPlaybackAuto: "Direct playback (auto)",
+    neoDark: "Neo Dark",
+    graphite: "Graphite Gray",
+    ivoryNoir: "Ivory Noir",
+    electricCyan: "Electric Cyan",
+    sunsetAmber: "Sunset Amber",
+};
+const I18N = { en: EN_I18N };
+const LOCALE_ALIASES = {
+  zh: "zh-CN",
+  "zh-hans": "zh-CN",
+  "zh-sg": "zh-CN",
+  "zh-my": "zh-CN",
+  "zh-hant": "zh-TW",
+  "zh-mo": "zh-HK",
+};
+let activeLocale = DEFAULT_LOCALE;
+const localeBundleCache = new Map();
+function localeAssetUrl(locale) {
+  const clean = String(locale || "").trim();
+  const path = `locales/${encodeURIComponent(clean)}.js`;
+  return BASE_PATH ? `${BASE_PATH}/${path}` : `/${path}`;
+}
+window.__moviesRegisterLocale = function registerLocale(locale, messages) {
+  const code = normalizeLocaleCode(locale);
+  if (!code || code === DEFAULT_LOCALE || !messages || typeof messages !== "object") {
+    return;
+  }
+  I18N[code] = Object.freeze({ ...messages });
+};
+function getStoredLocaleSelection() {
+  try {
+    return String(localStorage.getItem(LOCALE_STORAGE_KEY) || "").trim();
+  } catch (err) {
+    return "";
+  }
+}
+function setStoredLocaleSelection(locale) {
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, String(locale || "auto"));
+  } catch (err) {}
+}
+function normalizeLocaleCode(locale) {
+  const raw = String(locale || "").trim();
+  if (!raw) return "";
+  const canonical = raw.replace("_", "-");
+  if (SUPPORTED_LOCALES.includes(canonical)) return canonical;
+  const lower = canonical.toLowerCase();
+  if (LOCALE_ALIASES[lower]) return LOCALE_ALIASES[lower];
+  const parts = canonical.split("-");
+  if (parts[0].toLowerCase() === "zh") {
+    const script = (parts[1] || "").toLowerCase();
+    const region = (parts[1] || parts[2] || "").toLowerCase();
+    if (script === "hant" || ["tw", "hk", "mo"].includes(region)) {
+      return region === "hk" || region === "mo" ? "zh-HK" : "zh-TW";
+    }
+    return "zh-CN";
+  }
+  const base = parts[0].toLowerCase();
+  return SUPPORTED_LOCALES.find((code) => code.toLowerCase() === base) || "";
+}
+function getPreferredLocale() {
+  const storedRaw = getStoredLocaleSelection();
+  const stored = normalizeLocaleCode(storedRaw);
+  if (stored) return stored;
+  if (storedRaw && storedRaw.toLowerCase() !== "auto") {
+    return DEFAULT_LOCALE;
+  }
+  const candidates = Array.isArray(navigator.languages) && navigator.languages.length
+    ? navigator.languages
+    : [navigator.language || DEFAULT_LOCALE];
+  for (const candidate of candidates) {
+    const normalized = normalizeLocaleCode(candidate);
+    if (normalized) return normalized;
+  }
+  return DEFAULT_LOCALE;
+}
+function ensureLocaleBundle(locale) {
+  const normalized = normalizeLocaleCode(locale);
+  if (!normalized || normalized === DEFAULT_LOCALE || I18N[normalized]) {
+    return Promise.resolve();
+  }
+  if (localeBundleCache.has(normalized)) {
+    return localeBundleCache.get(normalized);
+  }
+  const pending = new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = localeAssetUrl(normalized);
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => resolve();
+    document.head.appendChild(script);
+  }).finally(() => {
+    localeBundleCache.delete(normalized);
+  });
+  localeBundleCache.set(normalized, pending);
+  return pending;
+}
+function tr(key, vars = {}) {
+  const table = I18N[activeLocale] || I18N[DEFAULT_LOCALE];
+  const fallback = I18N[DEFAULT_LOCALE];
+  let text = table[key] ?? fallback[key] ?? key;
+  for (const [name, value] of Object.entries(vars)) {
+    text = text.replaceAll(`{${name}}`, String(value));
+  }
+  return text;
+}
+function setText(id, key, vars) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = tr(key, vars);
+}
+function setTitle(id, key, vars) {
+  const el = document.getElementById(id);
+  if (el) el.title = tr(key, vars);
+}
+function setAttr(id, attr, key, vars) {
+  const el = document.getElementById(id);
+  if (el) el.setAttribute(attr, tr(key, vars));
+}
 let manualPlaybackMode = null;
 let currentPlaybackMode = null;
 let plexButton = null;
@@ -79,13 +279,13 @@ function updatePlexIndicator(mode) {
   plexButton.dataset.mode = manualPlaybackMode || "auto";
   plexButton.setAttribute("aria-pressed", String(forcedPlex));
   if (forcedPlex) {
-    plexButton.title = "Plex playback (forced)";
+    plexButton.title = tr("plexPlaybackForced");
   } else if (forcedDirect) {
-    plexButton.title = "Direct playback (forced)";
+    plexButton.title = tr("directPlaybackForced");
   } else {
     plexButton.title = mode === "plex"
-      ? "Plex playback (auto)"
-      : "Direct playback (auto)";
+      ? tr("plexPlaybackAuto")
+      : tr("directPlaybackAuto");
   }
 }
 
@@ -815,7 +1015,7 @@ const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const CACHE_MAX_RECORDS = 8;
 const CACHE_MAX_BYTES = 18 * 1024 * 1024;
 function deviceHeaders(extra = {}) {
-  return { ...extra, "X-Device-Id": deviceId };
+  return { ...extra, "X-Device-Id": deviceId, "X-UI-Locale": activeLocale || getPreferredLocale() };
 }
 
 async function loadServerConfig() {
@@ -829,6 +1029,7 @@ async function loadServerConfig() {
       const data = await res.json();
       serverConfig = data || {};
       debugEnabled = !!serverConfig.debug_enabled;
+      await applyLocale();
       updatePlexHomeLink();
       updateDebugPanel();
       return serverConfig;
@@ -1106,18 +1307,18 @@ function updateDebugPanel() {
   }
   const scan = catalogStatus?.scan_progress || {};
   const lines = [
-    `default: ${debugState.defaultMode || "unknown"}`,
-    `playback: ${currentPlaybackMode || "idle"}`,
-    `whitelist: ${
+    `${tr("defaultLabel")}: ${debugState.defaultMode || tr("unknown")}`,
+    `${tr("playbackLabel")}: ${currentPlaybackMode || tr("idle")}`,
+    `${tr("whitelistLabel")}: ${
       Array.isArray(serverConfig?.direct_audio_whitelist)
-        ? serverConfig.direct_audio_whitelist.join(", ") || "none"
-        : "none"
+        ? serverConfig.direct_audio_whitelist.join(", ") || tr("none")
+        : tr("none")
     }`,
-    `video: ${debugState.currentVideoId || "idle"}`,
-    `candidate: ${debugState.lastCandidate || "n/a"}`,
-    `scan: ${scan.phase || "idle"} entries:${
+    `${tr("videoLabel")}: ${debugState.currentVideoId || tr("idle")}`,
+    `${tr("candidateLabel")}: ${debugState.lastCandidate || tr("notApplicable")}`,
+    `${tr("scanLabel")}: ${scan.phase || tr("idle")} ${tr("entriesLabel")}:${
       scan.processed_entries ?? 0
-    } videos:${scan.videos_found ?? 0}`,
+    } ${tr("videosLabel")}:${scan.videos_found ?? 0}`,
   ];
   debugOutput.innerHTML = lines.map((line) => escapeHtml(line)).join("<br />");
   showDebugPanel();
@@ -1421,7 +1622,7 @@ let thumbPrefetchTimer = null;
 function updateStat() {
   const loaded = Math.min(renderCount, filteredVideos.length);
   const total = serverTotal || filteredVideos.length || loaded;
-  stat.textContent = `Loaded ${loaded} / Total ${total}`;
+  stat.textContent = tr("loadedTotal", { loaded, total });
 }
 
 function drainPrefetchBuffer() {
@@ -1436,6 +1637,11 @@ function drainPrefetchBuffer() {
   filteredVideos = videos;
 }
 const grid = document.getElementById("grid"),
+  localePicker = document.getElementById("localePicker"),
+  localeBtn = document.getElementById("localeBtn"),
+  localePanel = document.getElementById("localePanel"),
+  localeOptions = document.getElementById("localeOptions"),
+  localeSel = document.getElementById("localeSel"),
   q = document.getElementById("q"),
   folder = document.getElementById("folderSelect"),
   folderBtn = document.getElementById("folderBtn"),
@@ -1517,6 +1723,137 @@ let hlsLoadingPromise = null;
 let backgroundPageLoading = false;
 let playerSessionId = 0;
 const ENABLE_PREVIEW_FRAMES = true;
+
+function syncLocaleSelectValue() {
+  if (!localeSel) return;
+  const stored = getStoredLocaleSelection();
+  const configured = normalizeLocaleCode(serverConfig?.locale);
+  const nextValue = normalizeLocaleCode(stored) || configured || "auto";
+  localeSel.value = nextValue;
+}
+
+function updateLocaleButtonLabel() {
+  if (!localeBtn || !localeSel) return;
+  const selected = localeSel.options[localeSel.selectedIndex];
+  localeBtn.textContent = selected?.textContent || "Auto";
+}
+
+function renderLocaleOptions() {
+  if (!localeOptions || !localeSel) return;
+  localeOptions.innerHTML = "";
+  Array.from(localeSel.options).forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "locale-opt";
+    btn.textContent = opt.textContent || opt.value;
+    if (opt.value === localeSel.value) btn.classList.add("active");
+    btn.addEventListener("click", () => {
+      localeSel.value = opt.value;
+      localeSel.dispatchEvent(new Event("change"));
+      setPanelOpen(localePanel, false);
+    });
+    localeOptions.appendChild(btn);
+  });
+}
+
+function localizeThemeSelectOptions() {
+  if (!themeSel) return;
+  const labelMap = {
+    "neo-dark": "neoDark",
+    graphite: "graphite",
+    "ivory-noir": "ivoryNoir",
+    "electric-cyan": "electricCyan",
+    "sunset-amber": "sunsetAmber",
+  };
+  Array.from(themeSel.options).forEach((option) => {
+    const key = labelMap[option.value];
+    if (key) option.textContent = tr(key);
+  });
+}
+
+function localizeTransitionOptions() {
+  if (transitionSnapshotBtn) transitionSnapshotBtn.textContent = tr("transitionSnapshot");
+  if (transitionHeadBtn) transitionHeadBtn.textContent = tr("transitionClassic");
+  if (transitionSel) {
+    const snapshotOption = transitionSel.querySelector('option[value="snapshot"]');
+    const headOption = transitionSel.querySelector('option[value="head"]');
+    if (snapshotOption) snapshotOption.textContent = tr("transitionSnapshotFull");
+    if (headOption) headOption.textContent = tr("transitionClassicFull");
+  }
+}
+
+async function applyLocale() {
+  syncLocaleSelectValue();
+  activeLocale = getPreferredLocale();
+  await ensureLocaleBundle(activeLocale);
+  document.documentElement.lang = activeLocale;
+  document.title = tr("appTitle");
+  setText("brandTitle", "appTitle");
+  setAttr("plexHomeLink", "aria-label", "openPlex");
+  setAttr("q", "placeholder", "searchVideos");
+  setAttr("folderSearch", "placeholder", "searchFolder");
+  setText("transitionLabel", "androidTransition");
+  setText("debugHeader", "debug");
+  if (
+    debugOutput &&
+    (!debugEnabled ||
+      !debugOutput.textContent.trim() ||
+      debugOutput.textContent === I18N[DEFAULT_LOCALE].waitingForConfig)
+  ) {
+    debugOutput.textContent = tr("waitingForConfig");
+  }
+  setAttr("debugCorner", "aria-label", "showDebugPanel");
+  setAttr("toTopBtn", "aria-label", "backToTop");
+  setTitle("toTopBtn", "top");
+  setText("toTopBtn", "top");
+  setText("preloadText", "catLoading");
+  setText("plexSrText", "plexPlayback");
+  setText("modalLoaderText", "catLoading");
+  setAttr("privateDialog", "aria-label", "privateModeVerification");
+  setText("privateDialogTitle", "enterPrivatePasscode");
+  setText("privateDialogHint", "unlockPrivateFolders");
+  setAttr("ppass", "placeholder", "passcode");
+  setText("pcancel", "cancel");
+  setText("pok", "unlock");
+  setAttr("errorDialog", "aria-label", "error");
+  setText("eok", "ok");
+  setAttr("scanDialog", "aria-label", "scanActions");
+  setText("scanTitle", "scanActions");
+  setText("scanHint", "scanActionsHint");
+  setText("scanRescan", "rescan");
+  setText("scanRescanDesc", "scanRescanDesc");
+  setText("scanFull", "fullScan");
+  setText("scanFullDesc", "scanFullDesc");
+  setText("scanRefreshDb", "refreshDatabase");
+  setText("scanRefreshDbDesc", "scanRefreshDbDesc");
+  setText("scanCancel", "cancel");
+  setText("rescan", "rescan");
+  setTitle("rescan", "rescanMenuTitle");
+  setAttr("privateToggle", "aria-label", "privateMode");
+  if (localeSel) {
+    const autoOption = localeSel.querySelector('option[value="auto"]');
+    if (autoOption) autoOption.textContent = "Auto";
+  }
+  updateLocaleButtonLabel();
+  renderLocaleOptions();
+  localizeThemeSelectOptions();
+  localizeTransitionOptions();
+  renderThemeOptions();
+  refreshFolders();
+  updateThemeButtonLabel();
+  updatePrivateToggle();
+  updatePlexIndicator(currentPlaybackMode);
+  if (mtitle && !currentVideoId) mtitle.textContent = tr("appTitle");
+  if (mss) mss.textContent = slideshowEnabled ? tr("slideshowOn") : tr("slideshowOff");
+  if (msub) msub.textContent = subtitleEnabled ? tr("ccOn") : tr("ccOff");
+  if (mclose) mclose.textContent = tr("close");
+  document.querySelectorAll(".play-btn").forEach((btn) => {
+    btn.setAttribute("aria-label", tr("play"));
+    btn.title = tr("play");
+  });
+  updateStat();
+  updateDebugPanel();
+}
 
 function getPreviewFrameUrls(video) {
   const raw = Array.isArray(video?.preview_urls) ? video.preview_urls : [];
@@ -1613,7 +1950,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     resolvedSubtitle,
     fallbackVideoUrl,
   });
-  mtitle.textContent = name || "播放";
+  mtitle.textContent = name || tr("appTitle");
   if (hlsPlayer) {
     try {
       hlsPlayer.destroy();
@@ -1729,7 +2066,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
       track.default = true;
       mvideo.appendChild(track);
       currentSubtitleTrack = track;
-      msub.textContent = "CC: On";
+      msub.textContent = tr("ccOn");
       subtitleEnabled = true;
       const applyMode = () => {
         setSubtitleMode(subtitleEnabled);
@@ -1953,7 +2290,7 @@ function playNextInSlideshow() {
   const next = filteredVideos[idx + 1];
   if (!next) {
     slideshowEnabled = false;
-    mss.textContent = "Slideshow: Off";
+    mss.textContent = tr("slideshowOff");
     return;
   }
   currentVideoRecord = next;
@@ -1978,7 +2315,7 @@ function toggleSubtitle() {
   if (!currentSubtitleUrl) return;
   subtitleEnabled = !subtitleEnabled;
   setSubtitleMode(subtitleEnabled);
-  msub.textContent = subtitleEnabled ? "CC: On" : "CC: Off";
+  msub.textContent = subtitleEnabled ? tr("ccOn") : tr("ccOff");
 }
 function openPassModal() {
   ppass.value = "";
@@ -1988,9 +2325,9 @@ function openPassModal() {
 function closePassModal() {
   pmodal.classList.remove("on");
 }
-function showErrorModal(msg, title = "Error") {
-  if (etitle) etitle.textContent = title;
-  emsg.textContent = msg || "發生錯誤";
+function showErrorModal(msg, title = "") {
+  if (etitle) etitle.textContent = title || tr("error");
+  emsg.textContent = msg || tr("error");
   emodal.classList.add("on");
 }
 function closeErrorModal() {
@@ -2020,7 +2357,7 @@ async function performScanAction(mode) {
 mclose.addEventListener("click", closePlayer);
 mss.addEventListener("click", () => {
   slideshowEnabled = !slideshowEnabled;
-  mss.textContent = slideshowEnabled ? "Slideshow: On" : "Slideshow: Off";
+  mss.textContent = slideshowEnabled ? tr("slideshowOn") : tr("slideshowOff");
 });
 msub.addEventListener("click", toggleSubtitle);
 mvideo.addEventListener("ended", playNextInSlideshow);
@@ -2042,6 +2379,7 @@ pok.addEventListener("click", async () => {
     return;
   }
   let ok = false;
+  let errorMessage = "";
   try {
     const r = await fetch(apiUrl("private/unlock"), {
       method: "POST",
@@ -2049,9 +2387,13 @@ pok.addEventListener("click", async () => {
       body: JSON.stringify({ passcode: code }),
     });
     ok = !!r.ok;
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      errorMessage = String(body?.message || "").trim();
+    }
   } catch (e) {}
   if (!ok) {
-    showErrorModal("Wrong passcode", "Authentication failed");
+    showErrorModal(errorMessage || tr("wrongPasscode"), tr("authenticationFailed"));
     return;
   }
   setPrivateMode(true);
@@ -2361,10 +2703,7 @@ async function preflightPlaybackUrl(url) {
 
 function handlePlayback404() {
   closePlayer();
-  showErrorModal(
-    "File not found. The drive may be unmounted or sleeping. Please retry.",
-    "Playback failed",
-  );
+  showErrorModal(tr("playbackFileNotFound"), tr("playbackFailed"));
 }
 
 function cardHtml(v, w, h, opts = {}) {
@@ -2378,7 +2717,7 @@ function cardHtml(v, w, h, opts = {}) {
   const style = useFlex
     ? `flex:${flexFactor} 0 0;height:${Math.round(h)}px;`
     : `width:${cw}px;`;
-  return `<article class='card' style='${style}' data-rowh='${Math.round(h)}' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}' style='height:${Math.round(h)}px'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='播放' title='播放'>▶</button></div></div></article>`;
+  return `<article class='card' style='${style}' data-rowh='${Math.round(h)}' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}' style='height:${Math.round(h)}px'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='${escapeHtml(tr("play"))}' title='${escapeHtml(tr("play"))}'>▶</button></div></div></article>`;
 }
 
 function buildRows(items, { append = false, isFinal = false } = {}) {
@@ -2406,7 +2745,7 @@ function buildRows(items, { append = false, isFinal = false } = {}) {
         const safeNameTitle = escapeHtml(buildCardNameTitle(v));
         const safeFolder = escapeHtml(v.folder);
         const safeSize = escapeHtml(v.size);
-        return `<article class='card' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='播放' title='播放'>▶</button></div></div></article>`;
+        return `<article class='card' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='${escapeHtml(tr("play"))}' title='${escapeHtml(tr("play"))}'>▶</button></div></div></article>`;
       })
       .join("");
     bindCardEvents(wrap);
@@ -2675,7 +3014,9 @@ function render() {
   refreshFilteredIndexMap();
   if (catalogStatus && catalogStatus.available === false) {
     notice.style.display = "block";
-    notice.textContent = `Library not ready. Waiting for mounted disks: ${(catalogStatus.roots || []).join(", ")}`;
+    notice.textContent = tr("libraryNotReady", {
+      roots: (catalogStatus.roots || []).join(", "),
+    });
   } else {
     notice.style.display = "none";
     notice.textContent = "";
@@ -2700,7 +3041,7 @@ function renderFolderOptions() {
   const list = kw ? all.filter((f) => !f || f.toLowerCase().includes(kw)) : all;
   folderOptions.innerHTML = list
     .map((f) => {
-      const label = f || "All folders";
+      const label = f || tr("allFolders");
       const active = folder.value === f ? " active" : "";
       return `<button type='button' class='folder-opt${active}' data-val='${escapeHtml(f)}'>${escapeHtml(label)}</button>`;
     })
@@ -2709,7 +3050,7 @@ function renderFolderOptions() {
     b.addEventListener("click", () => {
       folder.value = b.dataset.val || "";
       saveFolderSelection(folder.value);
-      folderBtn.textContent = folder.value || "All folders";
+      folderBtn.textContent = folder.value || tr("allFolders");
       folderPanel.style.display = "none";
       load();
     });
@@ -2722,14 +3063,14 @@ function refreshFolders() {
     ? folderListCache
     : [...new Set(videos.map((v) => v.folder))].sort();
   folder.innerHTML =
-    `<option value=''>All folders</option>` +
+    `<option value=''>${escapeHtml(tr("allFolders"))}</option>` +
     set.map((f) => `<option value="${f}">${f}</option>`).join("");
   if (selected && set.includes(selected)) {
     folder.value = selected;
   } else {
     folder.value = "";
   }
-  folderBtn.textContent = folder.value || "All folders";
+  folderBtn.textContent = folder.value || tr("allFolders");
   renderFolderOptions();
 }
 function videosApiPath() {
@@ -2746,7 +3087,7 @@ function updatePrivateToggle() {
   btn.style.opacity = enabled ? "1" : "0.5";
   // UI strictly follows server auth state to avoid stale local state.
   btn.classList.toggle("on", authorized);
-  btn.title = authorized ? "Private Mode: On" : "Private Mode: Off";
+  btn.title = authorized ? tr("privateModeOn") : tr("privateModeOff");
 }
 function currentFolderFilter() {
   const live = (folder?.value || "").trim();
@@ -2935,7 +3276,7 @@ function applyTheme(v) {
 function updateThemeButtonLabel() {
   if (!themeBtn || !themeSel) return;
   const selected = themeSel.options[themeSel.selectedIndex];
-  themeBtn.textContent = selected?.textContent || "Theme";
+  themeBtn.textContent = selected?.textContent || tr("appTitle");
 }
 function renderThemeOptions() {
   if (!themeOptions || !themeSel) return;
@@ -2990,9 +3331,15 @@ function setPanelOpen(panel, open) {
   panel.style.display = open ? "block" : "none";
 }
 function closeHeaderPanels() {
+  setPanelOpen(localePanel, false);
   setPanelOpen(themePanel, false);
   setPanelOpen(folderPanel, false);
 }
+localeSel?.addEventListener("change", () => {
+  const normalized = normalizeLocaleCode(localeSel.value);
+  setStoredLocaleSelection(normalized || "auto");
+  applyLocale().catch(() => {});
+});
 transitionSel?.addEventListener("change", () => {
   try {
     localStorage.setItem(ANDROID_ZOOM_TRANSITION_KEY, transitionSel.value === "head" ? "head" : "snapshot");
@@ -3014,12 +3361,27 @@ themeBtn?.addEventListener("click", (e) => {
   e.stopPropagation();
   if (!themePanel) return;
   const open = isPanelOpen(themePanel);
-  if (!open) setPanelOpen(folderPanel, false);
+  if (!open) {
+    setPanelOpen(folderPanel, false);
+    setPanelOpen(localePanel, false);
+  }
   setPanelOpen(themePanel, !open);
   if (!open) {
     renderThemeOptions();
     updateAndroidTransitionControl();
   }
+});
+localeBtn?.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!localePanel) return;
+  const open = isPanelOpen(localePanel);
+  if (!open) {
+    setPanelOpen(folderPanel, false);
+    setPanelOpen(themePanel, false);
+  }
+  setPanelOpen(localePanel, !open);
+  if (!open) renderLocaleOptions();
 });
 window.addEventListener(
   "scroll",
@@ -3029,7 +3391,7 @@ window.addEventListener(
   { passive: true },
 );
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && isPanelOpen(themePanel)) setPanelOpen(themePanel, false);
+  if (e.key === "Escape") closeHeaderPanels();
 });
 updateThemeButtonLabel();
 renderThemeOptions();
@@ -3048,7 +3410,7 @@ folder.addEventListener("change", () => {
   const next = folder.value || "";
   if (next === lastAppliedFolderValue) return;
   saveFolderSelection(next);
-  folderBtn.textContent = next || "All folders";
+  folderBtn.textContent = next || tr("allFolders");
   renderFolderOptions();
   load();
 });
@@ -3056,7 +3418,10 @@ folderBtn.addEventListener("click", (e) => {
   e.preventDefault();
   e.stopPropagation();
   const open = isPanelOpen(folderPanel);
-  if (!open) setPanelOpen(themePanel, false);
+  if (!open) {
+    setPanelOpen(themePanel, false);
+    setPanelOpen(localePanel, false);
+  }
   setPanelOpen(folderPanel, !open);
   if (!open) {
     folderSearch.value = "";
@@ -3078,13 +3443,20 @@ const closeThemePanelIfOutside = (e) => {
   if (!themePicker || !isPanelOpen(themePanel)) return;
   if (!themePicker.contains(e.target)) setPanelOpen(themePanel, false);
 };
+const closeLocalePanelIfOutside = (e) => {
+  if (!localePicker || !isPanelOpen(localePanel)) return;
+  if (!localePicker.contains(e.target)) setPanelOpen(localePanel, false);
+};
 // Use pointer/touch capture so mobile taps outside close the panel immediately.
 document.addEventListener("pointerdown", closeFolderPanelIfOutside, true);
 document.addEventListener("pointerdown", closeThemePanelIfOutside, true);
+document.addEventListener("pointerdown", closeLocalePanelIfOutside, true);
 document.addEventListener("touchstart", closeFolderPanelIfOutside, true);
 document.addEventListener("touchstart", closeThemePanelIfOutside, true);
+document.addEventListener("touchstart", closeLocalePanelIfOutside, true);
 document.addEventListener("click", closeFolderPanelIfOutside, true);
 document.addEventListener("click", closeThemePanelIfOutside, true);
+document.addEventListener("click", closeLocalePanelIfOutside, true);
 window.addEventListener("scroll", () => {
   const y = window.scrollY || window.pageYOffset || 0;
   const goingDown = y >= lastScrollY;
@@ -3194,7 +3566,7 @@ document.getElementById("privateToggle").addEventListener("click", async () => {
     // Reset folder selection to avoid stuck private folder after lock.
     saveFolderSelection("");
     if (folder) folder.value = "";
-    if (folderBtn) folderBtn.textContent = "All folders";
+    if (folderBtn) folderBtn.textContent = tr("allFolders");
     if (catalogStatus) catalogStatus.private_authorized = false;
     updatePrivateToggle();
     try {
@@ -3266,6 +3638,7 @@ document.addEventListener("touchcancel", handlePinchEnd);
 
 if (!window.__mirandaMoviesBooted) {
   window.__mirandaMoviesBooted = true;
+  applyLocale().catch(() => {});
   updatePrivateToggle();
   load();
 }

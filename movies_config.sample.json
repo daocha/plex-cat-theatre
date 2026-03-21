@@ -9,6 +9,7 @@
   "http_port": 9245,
   "https_port": 9245,
   "mount_script": "",
+  "locale": "auto",
   "private_folder": [
     "Private"
   ],

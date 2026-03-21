@@ -1,0 +1,15 @@
+{
+  "forbidden_private": "비공개 미디어가 잠겨 있습니다.",
+  "missing_device_id": "장치 ID가 없습니다.",
+  "too_many_attempts": "잠금 해제 시도가 너무 많습니다. 잠시 후 다시 시도하세요.",
+  "invalid_passcode": "암호가 올바르지 않습니다.",
+  "scan_in_progress": "스캔이 이미 진행 중입니다.",
+  "subtitle_not_found": "자막을 찾을 수 없습니다",
+  "media_folder_not_mounted": "미디어 폴더가 마운트되지 않았습니다",
+  "file_not_found": "파일을 찾을 수 없습니다",
+  "hls_not_enabled": "이 파일에는 HLS가 활성화되어 있지 않습니다",
+  "ffmpeg_not_found": "ffmpeg를 찾을 수 없습니다",
+  "not_found": "찾을 수 없습니다",
+  "bad_request": "잘못된 요청",
+  "forbidden": "금지됨"
+}
