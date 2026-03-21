@@ -253,6 +253,10 @@ let plexHomeLink = null;
 const PLAYBACK_OVERRIDE_PREFIX = "playback-override:";
 let skipManualOverrideLoad = false;
 
+function isPlexIntegrationEnabled() {
+  return serverConfig?.plex_enabled !== false;
+}
+
 function isPlexStreamUrl(url) {
   const raw = String(url || "").trim();
   if (!raw) return false;
@@ -265,6 +269,7 @@ function isPlexStreamUrl(url) {
 }
 
 function getKnownPlexStreamUrl(video) {
+  if (!isPlexIntegrationEnabled()) return "";
   const explicit = String(video?.plex_stream_url || "").trim();
   if (explicit) return explicit;
   const id = String(video?.id || "").trim();
@@ -275,6 +280,20 @@ function getKnownPlexStreamUrl(video) {
     return `/plex/video/${id}.m3u8`;
   }
   return "";
+}
+
+function getLocalThumbUrl(video) {
+  const id = String(video?.id || "").trim();
+  return id ? `/thumbs/${id}.jpg` : "/thumbs/placeholder.jpg";
+}
+
+function getDisplayThumbUrl(video) {
+  const thumb = String(video?.thumb_url || "").trim();
+  if (!thumb) return getLocalThumbUrl(video);
+  if (!isPlexIntegrationEnabled() && isPlexPosterUrl(thumb)) {
+    return getLocalThumbUrl(video);
+  }
+  return thumb;
 }
 
 function isBrowserSafeDirectExtension(path) {
@@ -356,6 +375,9 @@ function updatePlexIndicator(mode) {
   const resolvedMode = mode || currentPlaybackMode || "direct";
   currentPlaybackMode = resolvedMode;
   if (!plexButton) return;
+  const plexEnabled = isPlexIntegrationEnabled();
+  plexButton.style.display = plexEnabled ? "" : "none";
+  if (!plexEnabled) return;
   const forcedPlex = manualPlaybackMode === "plex";
   const forcedDirect = manualPlaybackMode === "direct";
   const isActive = resolvedMode === "plex";
@@ -374,6 +396,7 @@ function updatePlexIndicator(mode) {
 }
 
 function cycleManualPlaybackMode() {
+  if (!isPlexIntegrationEnabled()) return;
   const video =
     currentVideoRecord ||
     (currentVideoId ? videos.find((v) => v.id === currentVideoId) : null);
@@ -472,6 +495,7 @@ function buildSizedPlexPosterUrl(url, width, height) {
 
 function shouldSkipPlexPosterSizing(img) {
   if (!(img instanceof HTMLImageElement)) return true;
+  if (!isPlexIntegrationEnabled()) return true;
   if (isIPadClient()) return true;
   if (!isAndroidClient()) return false;
   if (getAndroidZoomTransitionMode() === "head") return true;
@@ -937,11 +961,15 @@ function animateMobileZoomTransition(
   animateSnapshotZoomTransition(work, before, anchor, zoomingIn, durationMs);
 }
 function getPreferredPlaybackMode(v, override = null) {
-  if (override === "plex" || override === "direct") return override;
+  const plexEnabled = isPlexIntegrationEnabled();
+  if (override === "direct") return "direct";
+  if (override === "plex" && plexEnabled) return "plex";
   const name = String(v?.name || "").toLowerCase();
   const rel = String(v?.relative_path || "").toLowerCase();
   const path = rel || name;
-  if (path.endsWith(".mkv") || path.endsWith(".ts")) return "plex";
+  if (path.endsWith(".mkv") || path.endsWith(".ts")) {
+    return plexEnabled ? "plex" : "direct";
+  }
   const directUrl = String(
     v?.desktop_stream_url || v?.stream_url || v?.video_url || "",
   );
@@ -987,7 +1015,7 @@ function pickStreamCandidates(v) {
       ? v.desktop_stream_url
       : v.stream_url || v.video_url;
 
-  if (manualPlaybackMode === "plex") {
+  if (manualPlaybackMode === "plex" && plexUrl) {
     push(plexUrl);
     return out;
   }
@@ -997,7 +1025,7 @@ function pickStreamCandidates(v) {
     return out;
   }
 
-  if (mode === "plex") {
+  if (mode === "plex" && plexUrl) {
     push(plexUrl);
     push(directUrl);
   } else {
@@ -2846,6 +2874,16 @@ async function handleUnsupportedDirectPlayback() {
       return;
     }
   }
+  if (failedRecord?.soft_stream_url) {
+    const subtitle = failedRecord.subtitle_url
+      ? withBase(failedRecord.subtitle_url)
+      : null;
+    currentVideoRecord = failedRecord;
+    updateDebugMediaState(failedRecord);
+    showToast(tr("playbackUnsupportedDirect"));
+    openPlayer([failedRecord.soft_stream_url], failedRecord.name, subtitle);
+    return;
+  }
   closePlayer();
   showToast(tr("playbackUnsupportedDirect"));
 }
@@ -2861,7 +2899,7 @@ function cardHtml(v, w, h, opts = {}) {
   const style = useFlex
     ? `flex:${flexFactor} 0 0;height:${Math.round(h)}px;`
     : `width:${cw}px;`;
-  return `<article class='card' style='${style}' data-rowh='${Math.round(h)}' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}' style='height:${Math.round(h)}px'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='${escapeHtml(tr("play"))}' title='${escapeHtml(tr("play"))}'>▶</button></div></div></article>`;
+  return `<article class='card' style='${style}' data-rowh='${Math.round(h)}' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(getDisplayThumbUrl(v))}' alt='${safeName}' style='height:${Math.round(h)}px'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='${escapeHtml(tr("play"))}' title='${escapeHtml(tr("play"))}'>▶</button></div></div></article>`;
 }
 
 function buildRows(items, { append = false, isFinal = false } = {}) {
@@ -2889,7 +2927,7 @@ function buildRows(items, { append = false, isFinal = false } = {}) {
         const safeNameTitle = escapeHtml(buildCardNameTitle(v));
         const safeFolder = escapeHtml(v.folder);
         const safeSize = escapeHtml(v.size);
-        return `<article class='card' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(v.thumb_url)}' alt='${safeName}'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='${escapeHtml(tr("play"))}' title='${escapeHtml(tr("play"))}'>▶</button></div></div></article>`;
+        return `<article class='card' data-id='${v.id}' data-url='${withBase(v.stream_url || v.video_url)}' data-name='${safeName}' data-subtitle='${v.subtitle_url || ""}'><img class='thumb' loading='lazy' src='${withBase(getDisplayThumbUrl(v))}' alt='${safeName}'/><div class='meta'><div class='name' title='${safeNameTitle}' data-fullname='${safeNameTitle}'>${safeName}</div><div class='sub' title='${safeFolder} · ${safeSize}' data-fullname='${safeFolder} · ${safeSize}'>${safeFolder} · ${safeSize}</div><div class='actions'><button class='play-btn' type='button' aria-label='${escapeHtml(tr("play"))}' title='${escapeHtml(tr("play"))}'>▶</button></div></div></article>`;
       })
       .join("");
     bindCardEvents(wrap);
@@ -3067,7 +3105,7 @@ function scheduleThumbPrefetch() {
     const targetStart = Math.max(0, start - THUMB_PREFETCH_BEHIND);
     const targetEnd = Math.min(filteredVideos.length, end + ahead);
     for (let i = targetStart; i < targetEnd; i++) {
-      const u = withBase(filteredVideos[i]?.thumb_url || "");
+      const u = withBase(getDisplayThumbUrl(filteredVideos[i]) || "");
       queueThumbPrefetch(u);
     }
     pumpThumbPrefetchQueue();
