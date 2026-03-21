@@ -132,8 +132,9 @@ De voorbeeldconfiguratie is bewust opgeschoond en bevat niet:
 - `private_folder`: mapprefixen die als privé worden behandeld
 - `private_passcode`: hash van de privémodus-passcode
 - `mount_script`: optioneel commando dat wordt gebruikt wanneer afspelen een ontbrekende mediamap raakt
+- `transcode`: schakelt de achtergrondtranscodeworker aan de cataloguskant in voor broncontainers zoals `.mkv` en `.ts`; dit kan aparte getranscodeerde sidecarbestanden naast de mediabibliotheek genereren, dus normaal laat je dit best op `false`, vooral wanneer Plex-integratie is ingeschakeld
 - `auto_scan_on_start`: media opnieuw scannen bij opstarten
-- `on_demand_transcode`: ingebouwde transcoding voor broncontainers inschakelen
+- `on_demand_transcode`: runtime-transcoding in de speler voor broncontainers inschakelen, waarbij zo mogelijk hardware-encoding wordt gebruikt en anders wordt teruggevallen op software-encoding
 - `on_demand_hls`: ingebouwde HLS-playlists voor broncontainers inschakelen
 - `enable_plex_server`: Plex-integratie inschakelen
 - `plex.base_url`: basis-URL van de Plex-server

@@ -132,8 +132,9 @@ Config mẫu đã được làm sạch có chủ đích và không bao gồm:
 - `private_folder`: các tiền tố thư mục được xem là riêng tư
 - `private_passcode`: hash passcode của chế độ riêng tư
 - `mount_script`: lệnh tùy chọn dùng khi phát chạm vào thư mục media bị thiếu
+- `transcode`: bật worker transcoding nền ở phía catalog cho các source container như `.mkv` và `.ts`; việc này có thể tạo ra các tệp sidecar đã transcoded riêng nằm cạnh thư viện media, vì vậy thường nên để là `false`, đặc biệt khi đã bật tích hợp Plex
 - `auto_scan_on_start`: quét lại media khi khởi động
-- `on_demand_transcode`: bật transcoding tích hợp cho container nguồn
+- `on_demand_transcode`: bật transcoding lúc chạy phía player cho container nguồn, ưu tiên dùng mã hóa phần cứng khi có và fallback sang mã hóa phần mềm khi cần
 - `on_demand_hls`: bật playlist HLS tích hợp cho container nguồn
 - `enable_plex_server`: bật tích hợp Plex
 - `plex.base_url`: URL gốc của Plex server

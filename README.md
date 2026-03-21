@@ -132,8 +132,9 @@ The sample config is intentionally sanitized and does not include:
 - `private_folder`: folder prefixes treated as private
 - `private_passcode`: private-mode passcode hash
 - `mount_script`: optional command used when playback hits a missing media folder
+- `transcode`: enable the catalog-side background transcode worker for source containers such as `.mkv` and `.ts`; this can generate separate transcoded sidecar media files alongside the source library, so it is usually best left `false`, especially when Plex integration is enabled
 - `auto_scan_on_start`: rescan media on startup
-- `on_demand_transcode`: enable built-in transcoding for source containers
+- `on_demand_transcode`: enable runtime player transcoding for source containers, using hardware encode when available and falling back to software encode when needed
 - `on_demand_hls`: enable built-in HLS playlists for source containers
 - `enable_plex_server`: enable Plex integration
 - `plex.base_url`: Plex server base URL

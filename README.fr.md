@@ -132,8 +132,9 @@ L’exemple de configuration est volontairement nettoyé et n’inclut pas :
 - `private_folder` : préfixes de dossiers considérés comme privés
 - `private_passcode` : hachage du code secret du mode privé
 - `mount_script` : commande optionnelle utilisée lorsqu’une lecture atteint un dossier média manquant
+- `transcode` : active le worker de transcodage en arrière-plan côté catalogue pour les conteneurs source comme `.mkv` et `.ts` ; cela peut générer des fichiers transcodés séparés à côté de la bibliothèque média, donc il est généralement préférable de le laisser à `false`, surtout lorsque l’intégration Plex est activée
 - `auto_scan_on_start` : rescanner les médias au démarrage
-- `on_demand_transcode` : activer le transcodage intégré pour les conteneurs source
+- `on_demand_transcode` : activer le transcodage d’exécution côté lecteur pour les conteneurs source, avec tentative d’encodage matériel en priorité puis repli logiciel si nécessaire
 - `on_demand_hls` : activer les playlists HLS intégrées pour les conteneurs source
 - `enable_plex_server` : activer l’intégration Plex
 - `plex.base_url` : URL de base du serveur Plex
