@@ -52,6 +52,7 @@ const SUPPORTED_LOCALES = [
   "nl",
 ];
 const LOCALE_STORAGE_KEY = "movies_locale";
+const LOCALE_COOKIE_KEY = "movies_ui_locale";
 const EN_I18N = {
     appTitle: "Cat Theatre",
     openPlex: "Open Plex",
@@ -103,6 +104,7 @@ const EN_I18N = {
     play: "Play",
     playbackFailed: "Playback failed",
     playbackFileNotFound: "File not found. The drive may be unmounted or sleeping. Please retry.",
+    playbackUnsupportedDirect: "Direct playback is not supported for this file on this device. Switched back to automatic playback.",
     defaultLabel: "default",
     playbackLabel: "playback",
     whitelistLabel: "whitelist",
@@ -111,6 +113,7 @@ const EN_I18N = {
     scanLabel: "scan",
     entriesLabel: "entries",
     videosLabel: "videos",
+    codecLabel: "codec",
     unknown: "unknown",
     idle: "idle",
     none: "none",
@@ -195,6 +198,10 @@ function getPreferredLocale() {
   }
   return DEFAULT_LOCALE;
 }
+function persistEffectiveLocaleCookie(locale) {
+  const normalized = normalizeLocaleCode(locale) || DEFAULT_LOCALE;
+  document.cookie = `${LOCALE_COOKIE_KEY}=${encodeURIComponent(normalized)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+}
 function ensureLocaleBundle(locale) {
   const normalized = normalizeLocaleCode(locale);
   if (!normalized || normalized === DEFAULT_LOCALE || I18N[normalized]) {
@@ -268,6 +275,81 @@ function getKnownPlexStreamUrl(video) {
   return "";
 }
 
+function isBrowserSafeDirectExtension(path) {
+  const lower = String(path || "").toLowerCase();
+  return (
+    lower.endsWith(".mp4") ||
+    lower.endsWith(".m4v") ||
+    lower.endsWith(".webm")||
+    lower.endsWith(".avi")
+  );
+}
+
+function canDirectPlayVideo(video, directUrl) {
+  const name = String(video?.name || "").toLowerCase();
+  const rel = String(video?.relative_path || "").toLowerCase();
+  const path = rel || name;
+  if (!isBrowserSafeDirectExtension(path)) return false;
+  const direct = String(directUrl || "").trim();
+  if (!direct || direct.includes("?fmp4=1") || direct.includes("/hls/")) {
+    return false;
+  }
+  if (serverConfig?.direct_playback_enabled === false) return false;
+  if (video?.direct_play_safe === true) return true;
+
+  const codecs = Array.isArray(video?.audio_codecs)
+    ? video.audio_codecs
+        .map((codec) => String(codec || "").trim().toLowerCase())
+        .filter(Boolean)
+    : [];
+  const whitelist = Array.isArray(serverConfig?.direct_audio_whitelist)
+    ? serverConfig.direct_audio_whitelist
+        .map((codec) => String(codec || "").trim().toLowerCase())
+        .filter(Boolean)
+    : [];
+  if (codecs.length && whitelist.length) {
+    const allowed = new Set(whitelist);
+    return codecs.every((codec) => allowed.has(codec));
+  }
+
+  if (!codecs.length) {
+    // Preserve the older behavior for browser-safe files when codec metadata
+    // is missing: prefer direct play instead of forcing Plex.
+    return true;
+  }
+
+  // Preserve the previous default for browser-safe extensions when no
+  // definitive codec verdict is available from fresh network data yet.
+  return video?.direct_play_safe !== false;
+}
+
+function getDebugVideoFormat(record) {
+  const currentPath = String(
+    record?.relative_path || record?.name || "",
+  ).toLowerCase();
+  const videoFormatMatch = currentPath.match(/\.([a-z0-9]+)$/i);
+  return videoFormatMatch ? videoFormatMatch[1] : tr("unknown");
+}
+
+function getDebugAudioFormat(record) {
+  const raw = record?.audio_codecs;
+  if (Array.isArray(raw)) {
+    const values = raw
+      .map((codec) => String(codec || "").trim().toLowerCase())
+      .filter(Boolean);
+    if (values.length) return values.join(", ");
+  } else if (typeof raw === "string") {
+    const value = raw.trim().toLowerCase();
+    if (value) return value;
+  }
+  return tr("unknown");
+}
+
+function updateDebugMediaState(record) {
+  debugState.currentVideoFormat = record ? getDebugVideoFormat(record) : "";
+  debugState.currentAudioFormat = record ? getDebugAudioFormat(record) : "";
+}
+
 function updatePlexIndicator(mode) {
   const resolvedMode = mode || currentPlaybackMode || "direct";
   currentPlaybackMode = resolvedMode;
@@ -309,6 +391,7 @@ function cycleManualPlaybackMode() {
   updateDebugPanel();
   if (video) {
     currentVideoRecord = video;
+    updateDebugMediaState(video);
     const subtitle = video.subtitle_url ? withBase(video.subtitle_url) : null;
     openPlayer(pickStreamCandidates(video), video.name, subtitle);
     return;
@@ -862,11 +945,7 @@ function getPreferredPlaybackMode(v, override = null) {
   );
   const hasPlex = Boolean(getKnownPlexStreamUrl(v));
   if (!hasPlex) return "direct";
-  if (directUrl.includes("?fmp4=1") || directUrl.includes("/hls/")) return "plex";
-  const safeExt =
-    path.endsWith(".mp4") || path.endsWith(".m4v") || path.endsWith(".webm");
-  const directSafe = Boolean(v?.direct_play_safe);
-  if (safeExt && directSafe) return "direct";
+  if (canDirectPlayVideo(v, directUrl)) return "direct";
   return "plex";
 }
 function pickStreamUrl(v) {
@@ -989,6 +1068,8 @@ const debugState = {
   lastCandidate: "",
   candidates: [],
   defaultMode: null,
+  currentVideoFormat: "",
+  currentAudioFormat: "",
 };
 let privatePasscode = "";
 function setPrivateMode(v) {
@@ -1306,9 +1387,15 @@ function updateDebugPanel() {
     return;
   }
   const scan = catalogStatus?.scan_progress || {};
+  const currentRecord =
+    currentVideoRecord ||
+    (currentVideoId ? videos.find((v) => v.id === currentVideoId) : null);
+  const videoFormat = getDebugVideoFormat(currentRecord);
+  const audioFormat = getDebugAudioFormat(currentRecord);
   const lines = [
     `${tr("defaultLabel")}: ${debugState.defaultMode || tr("unknown")}`,
     `${tr("playbackLabel")}: ${currentPlaybackMode || tr("idle")}`,
+    `${tr("codecLabel")}: ${videoFormat} / ${audioFormat}`,
     `${tr("whitelistLabel")}: ${
       Array.isArray(serverConfig?.direct_audio_whitelist)
         ? serverConfig.direct_audio_whitelist.join(", ") || tr("none")
@@ -1650,6 +1737,7 @@ const grid = document.getElementById("grid"),
   folderOptions = document.getElementById("folderOptions"),
   stat = document.getElementById("stat"),
   notice = document.getElementById("notice"),
+  toast = document.getElementById("toast"),
   tt = document.getElementById("tt"),
   scrollSentinel = document.getElementById("scrollSentinel"),
   debugPanel = document.getElementById("debugPanel"),
@@ -1658,6 +1746,7 @@ const debugCorner = document.getElementById("debugCorner");
 let currentMobileCols = 4;
 let mobileZoomLevel = readPersistedMobileZoomLevel();
 applyMobileColumnSetting();
+let toastTimer = null;
 const toTopBtn = document.getElementById("toTopBtn");
 const preloadOverlay = document.getElementById("preloadOverlay");
 const modal = document.getElementById("modal"),
@@ -1727,6 +1816,10 @@ const ENABLE_PREVIEW_FRAMES = true;
 function syncLocaleSelectValue() {
   if (!localeSel) return;
   const stored = getStoredLocaleSelection();
+  if (String(stored || "").trim().toLowerCase() === "auto") {
+    localeSel.value = "auto";
+    return;
+  }
   const configured = normalizeLocaleCode(serverConfig?.locale);
   const nextValue = normalizeLocaleCode(stored) || configured || "auto";
   localeSel.value = nextValue;
@@ -1786,6 +1879,7 @@ async function applyLocale() {
   syncLocaleSelectValue();
   activeLocale = getPreferredLocale();
   await ensureLocaleBundle(activeLocale);
+  persistEffectiveLocaleCookie(activeLocale);
   document.documentElement.lang = activeLocale;
   document.title = tr("appTitle");
   setText("brandTitle", "appTitle");
@@ -1925,6 +2019,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
     currentVideoId && videos.length
       ? videos.find((v) => v.id === currentVideoId) || currentVideoRecord
       : currentVideoRecord;
+  updateDebugMediaState(currentVideoRecord);
   debugState.currentVideoId = videoId;
   debugState.candidates = candidates;
   debugState.defaultMode = currentVideoRecord
@@ -2198,6 +2293,10 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
   mvideo.onerror = () => {
     if (!isActiveSession()) return;
     if (mvideo.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+      if (manualPlaybackMode === "direct" || !isPlexStreamUrl(activeUrl)) {
+        handleUnsupportedDirectPlayback();
+        return;
+      }
       handlePlayback404();
       return;
     }
@@ -2213,6 +2312,7 @@ async function openPlayer(urlOrCandidates, name, subtitleUrl) {
 
 async function playVideoWithOverride(video, subtitleUrl) {
   if (!video) return;
+  updateDebugMediaState(video);
   if (!skipManualOverrideLoad && video.id) {
     manualPlaybackMode = await loadManualPlaybackOverride(video.id);
   }
@@ -2281,6 +2381,7 @@ function closePlayer() {
   debugState.lastCandidate = "";
   debugState.candidates = [];
   debugState.defaultMode = null;
+  updateDebugMediaState(null);
   updateDebugPanel();
 }
 function playNextInSlideshow() {
@@ -2294,6 +2395,7 @@ function playNextInSlideshow() {
     return;
   }
   currentVideoRecord = next;
+  updateDebugMediaState(next);
   const sub = next && next.subtitle_url ? withBase(next.subtitle_url) : null;
   playVideoWithOverride(next, sub);
 }
@@ -2704,6 +2806,46 @@ async function preflightPlaybackUrl(url) {
 function handlePlayback404() {
   closePlayer();
   showErrorModal(tr("playbackFileNotFound"), tr("playbackFailed"));
+}
+
+function showToast(message) {
+  if (!toast) return;
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+    toastTimer = null;
+  }
+  toast.textContent = String(message || "").trim();
+  if (!toast.textContent) return;
+  toast.classList.add("on");
+  toastTimer = setTimeout(() => {
+    toast.classList.remove("on");
+    toastTimer = null;
+  }, 3000);
+}
+
+async function handleUnsupportedDirectPlayback() {
+  const failedVideoId = currentVideoId;
+  const failedRecord =
+    currentVideoRecord ||
+    (failedVideoId ? videos.find((v) => v.id === failedVideoId) : null);
+  if (manualPlaybackMode === "direct" && failedVideoId) {
+    manualPlaybackMode = null;
+    try {
+      await persistManualPlaybackOverride(failedVideoId, null);
+    } catch (err) {}
+    if (failedRecord && getKnownPlexStreamUrl(failedRecord)) {
+      const subtitle = failedRecord.subtitle_url
+        ? withBase(failedRecord.subtitle_url)
+        : null;
+      currentVideoRecord = failedRecord;
+      updateDebugMediaState(failedRecord);
+      showToast(tr("playbackUnsupportedDirect"));
+      openPlayer(pickStreamCandidates(failedRecord), failedRecord.name, subtitle);
+      return;
+    }
+  }
+  closePlayer();
+  showToast(tr("playbackUnsupportedDirect"));
 }
 
 function cardHtml(v, w, h, opts = {}) {

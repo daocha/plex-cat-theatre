@@ -186,6 +186,9 @@ def request_locale() -> str:
     requested = normalize_locale_code(str(request.headers.get("X-UI-Locale", "") or ""))
     if requested:
         return requested
+    cookie_locale = normalize_locale_code(str(request.cookies.get("movies_ui_locale", "") or ""))
+    if cookie_locale:
+        return cookie_locale
     configured = normalize_locale_code(str(cfg_runtime.get("locale", "") or ""))
     if configured and configured != "auto":
         return configured
