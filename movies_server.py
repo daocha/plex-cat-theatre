@@ -776,7 +776,7 @@ def thumb_placeholder(prefix=None):
         b"<svg xmlns='http://www.w3.org/2000/svg' width='512' height='288'>"
         b"<rect width='100%' height='100%' fill='#1c1d27'/>"
         b"<text x='50%' y='50%' fill='#8f93ad' dominant-baseline='middle' "
-        b"text-anchor='middle' font-size='28'>Miranda Cinema</text></svg>"
+        b"text-anchor='middle' font-size='28'>Cat Theatre</text></svg>"
     )
     return apply_public_image_cache(
         Response(svg, mimetype="image/svg+xml"),
@@ -975,7 +975,13 @@ def hls_segment(vid, seq):
 
 @app.route("/plex/poster/<vid>.jpg")
 def plex_poster(vid):
+    decoded_vid = urllib.parse.unquote(vid)
     if not plex_adapter or not plex_adapter.enabled:
+        thumb_path = catalog.thumb_map.get(decoded_vid)
+        if thumb_path and thumb_path.exists():
+            return apply_public_image_cache(
+                send_file(thumb_path, mimetype="image/jpeg")
+            )
         return thumb_placeholder()
     try:
         plex_adapter.bind_catalog(catalog.video_map)
@@ -990,11 +996,16 @@ def plex_poster(vid):
     except Exception:
         req_h = 540
     resp, err = plex_adapter.proxy_resized_poster(
-        urllib.parse.unquote(vid),
+        decoded_vid,
         req_w,
         req_h,
     )
     if not resp:
+        thumb_path = catalog.thumb_map.get(decoded_vid)
+        if thumb_path and thumb_path.exists():
+            return apply_public_image_cache(
+                send_file(thumb_path, mimetype="image/jpeg")
+            )
         return thumb_placeholder()
     try:
         body = resp.read()
