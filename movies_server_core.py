@@ -109,9 +109,10 @@ class StripPrefixMiddleware:
         "video",
     "hls",
     "thumbs",
-    "subtitle",
-    "rescan",
-    "movies.css",
+        "subtitle",
+        "rescan",
+        "locales",
+        "movies.css",
     "movies.js",
     "movies.min.js",
     "plex.svg",
@@ -313,6 +314,7 @@ def load_config(path: Path) -> Dict:
     cfg.setdefault("auto_scan_on_start", True)
     cfg.setdefault("debug_enabled", False)
     cfg.setdefault("mount_script", "")
+    cfg.setdefault("locale", "auto")
     cfg.setdefault(
         "direct_playback",
         {
