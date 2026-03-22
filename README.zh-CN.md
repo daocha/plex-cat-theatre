@@ -1,6 +1,12 @@
 # Cat Theatre Movies Server
 
-> 基于 Flask、Waitress 和 `ffmpeg` 构建的自托管电影浏览与流媒体服务器，并可选集成 Plex 以提供更偏向兼容性的播放方案。
+> 基于 Flask、Waitress 和 `ffmpeg` 构建的轻量级自托管电影浏览与流媒体服务器，并可选集成 _`Plex`_ 以提供更注重兼容性的播放方案。
+
+---
+
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+
+---
 
 **语言**
 
@@ -48,19 +54,6 @@ Cat Theatre 的设计目标是保持轻量：
 
 ---
 
-## 项目结构
-
-- `movies_server.py`：Flask 入口与路由绑定
-- `movies_server_core.py`：认证、配置、Cookie 与挂载路径处理等共享服务端辅助逻辑
-- `movies_catalog.py`：目录扫描、缩略图生成、字幕提取和本地转码辅助逻辑
-- `movies_server_plex.py`：Plex 适配器、海报/字幕映射与 Plex HLS 代理
-- `movies.js`：前端源码
-- `movies.min.js`：前端压缩包
-- `movies.css`：图库与播放器样式
-- `passcode.py`：用于轮换私密模式口令的辅助脚本
-
----
-
 ## 依赖要求
 
 ### Python
@@ -92,6 +85,23 @@ which ffprobe
 
 ## 快速开始
 
+首选启动方式：
+
+```bash
+./startup.sh
+```
+
+这个引导脚本可以：
+
+- 首次运行时根据示例配置创建 `movies_config.json`
+- 创建本地 `.venv`
+- 将 Python 依赖安装到这个本地虚拟环境中
+- 检查 `ffmpeg` 和 `ffprobe`
+- 可选地帮助你生成私密模式口令哈希
+- 使用本地配置启动服务器
+
+你仍然可以使用下面的手动流程：
+
 1. 复制示例配置：
 
 ```bash
@@ -113,6 +123,19 @@ http://localhost:9245
 ```
 
 如果你通过反向代理把应用部署在如 `/movie/` 这样的前缀下，请改为打开带前缀的 URL。
+
+---
+
+## 项目结构
+
+- `movies_server.py`：Flask 入口与路由绑定
+- `movies_server_core.py`：认证、配置、Cookie 与挂载路径处理等共享服务端辅助逻辑
+- `movies_catalog.py`：目录扫描、缩略图生成、字幕提取和本地转码辅助逻辑
+- `movies_server_plex.py`：Plex 适配器、海报/字幕映射与 Plex HLS 代理
+- `movies.js`：前端源码
+- `movies.min.js`：前端压缩包
+- `movies.css`：图库与播放器样式
+- `passcode.py`：用于轮换私密模式口令的辅助脚本
 
 ---
 
