@@ -827,9 +827,16 @@ function createZoomSnapshotLayer(cards, rects) {
       cloneImg.decoding = "sync";
       const liveSrc = sourceImg.currentSrc || sourceImg.src || sourceImg.getAttribute("src") || "";
       if (liveSrc) cloneImg.src = liveSrc;
+      const imgRect = sourceImg.getBoundingClientRect();
       const computed = window.getComputedStyle(sourceImg);
+      if (imgRect.width > 0) cloneImg.style.width = `${imgRect.width}px`;
+      if (imgRect.height > 0) cloneImg.style.height = `${imgRect.height}px`;
+      if (computed.aspectRatio && computed.aspectRatio !== "auto") {
+        cloneImg.style.aspectRatio = computed.aspectRatio;
+      }
       cloneImg.style.objectFit = computed.objectFit || "cover";
       cloneImg.style.objectPosition = computed.objectPosition || "center center";
+      cloneImg.style.maxHeight = computed.maxHeight || "none";
     }
     const cardStyle = window.getComputedStyle(card);
     clone.style.width = `${rect.width}px`;
