@@ -1,6 +1,12 @@
 # Cat Theatre Movies Server
 
-> Selbst gehosteter Film-Browser und Streaming-Server auf Basis von Flask, Waitress und `ffmpeg`, mit optionaler Plex-Integration für einen stärker kompatibilitätsorientierten Wiedergabepfad.
+> Leichtgewichtiger selbst gehosteter Film-Browser und Streaming-Server auf Basis von Flask, Waitress und `ffmpeg`, mit optionaler _`Plex`_-Integration für einen kompatibilitätsorientierten Wiedergabepfad.
+
+---
+
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+
+---
 
 **Sprachen**
 
@@ -48,19 +54,6 @@ Es ist ausgelegt für:
 
 ---
 
-## Projektstruktur
-
-- `movies_server.py`: Flask-Einstiegspunkt und Routenverdrahtung
-- `movies_server_core.py`: gemeinsame Server-Helfer für Auth, Konfiguration, Cookies und Mount-Pfad-Behandlung
-- `movies_catalog.py`: Katalog-Scan, Thumbnail-Erzeugung, Untertitel-Extraktion und lokale Transcoding-Helfer
-- `movies_server_plex.py`: Plex-Adapter, Poster-/Untertitel-Zuordnung und Plex-HLS-Proxying
-- `movies.js`: Frontend-Quellcode
-- `movies.min.js`: minifiziertes Frontend-Bundle
-- `movies.css`: Styles für Galerie und Player
-- `passcode.py`: Hilfsskript zum Rotieren des Private-Mode-Passcodes
-
----
-
 ## Anforderungen
 
 ### Python
@@ -92,6 +85,23 @@ which ffprobe
 
 ## Schnellstart
 
+Bevorzugte Startmethode:
+
+```bash
+./startup.sh
+```
+
+Dieses Bootstrap-Skript kann:
+
+- beim ersten Start `movies_config.json` aus der Beispielkonfiguration erstellen
+- ein lokales `.venv` anlegen
+- Python-Abhängigkeiten in diese lokale virtuelle Umgebung installieren
+- `ffmpeg` und `ffprobe` prüfen
+- optional beim Erzeugen des Hashes für den Private-Mode-Passcode helfen
+- den Server mit deiner lokalen Konfiguration starten
+
+Du kannst weiterhin den manuellen Ablauf unten verwenden:
+
 1. Beispielkonfiguration kopieren:
 
 ```bash
@@ -113,6 +123,19 @@ http://localhost:9245
 ```
 
 Wenn du die App hinter einem Reverse Proxy unter einem Präfix wie `/movie/` betreibst, öffne stattdessen die URL mit Präfix.
+
+---
+
+## Projektstruktur
+
+- `movies_server.py`: Flask-Einstiegspunkt und Routenverdrahtung
+- `movies_server_core.py`: gemeinsame Server-Helfer für Auth, Konfiguration, Cookies und Mount-Pfad-Behandlung
+- `movies_catalog.py`: Katalog-Scan, Thumbnail-Erzeugung, Untertitel-Extraktion und lokale Transcoding-Helfer
+- `movies_server_plex.py`: Plex-Adapter, Poster-/Untertitel-Zuordnung und Plex-HLS-Proxying
+- `movies.js`: Frontend-Quellcode
+- `movies.min.js`: minifiziertes Frontend-Bundle
+- `movies.css`: Styles für Galerie und Player
+- `passcode.py`: Hilfsskript zum Rotieren des Private-Mode-Passcodes
 
 ---
 

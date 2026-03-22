@@ -1,6 +1,12 @@
 # Cat Theatre Movies Server
 
-> Máy chủ duyệt phim và phát trực tuyến tự lưu trữ được xây dựng bằng Flask, Waitress và `ffmpeg`, với tích hợp Plex tùy chọn cho lộ trình phát ưu tiên tính tương thích.
+> Máy chủ duyệt phim và phát trực tuyến tự lưu trữ gọn nhẹ được xây dựng bằng Flask, Waitress và `ffmpeg`, với tích hợp _`Plex`_ tùy chọn cho lộ trình phát ưu tiên tính tương thích.
+
+---
+
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+
+---
 
 **Ngôn ngữ**
 
@@ -48,19 +54,6 @@ Nó được thiết kế cho:
 
 ---
 
-## Cấu Trúc Dự Án
-
-- `movies_server.py`: entrypoint Flask và nối route
-- `movies_server_core.py`: helper dùng chung phía server cho auth, config, cookie và xử lý mount path
-- `movies_catalog.py`: quét catalog, tạo thumbnail, trích xuất phụ đề và helper transcoding cục bộ
-- `movies_server_plex.py`: adapter Plex, ánh xạ poster/phụ đề và proxy Plex HLS
-- `movies.js`: mã nguồn frontend
-- `movies.min.js`: bundle frontend đã minify
-- `movies.css`: style của gallery và player
-- `passcode.py`: helper để xoay vòng passcode chế độ riêng tư
-
----
-
 ## Yêu Cầu
 
 ### Python
@@ -92,6 +85,23 @@ which ffprobe
 
 ## Bắt Đầu Nhanh
 
+Cách khởi động được khuyến nghị:
+
+```bash
+./startup.sh
+```
+
+Script bootstrap này có thể:
+
+- tạo `movies_config.json` từ config mẫu trong lần chạy đầu tiên
+- tạo `.venv` cục bộ
+- cài đặt các dependency Python vào môi trường ảo cục bộ đó
+- kiểm tra `ffmpeg` và `ffprobe`
+- tùy chọn hỗ trợ tạo hash passcode cho chế độ riêng tư
+- khởi động server bằng config cục bộ của bạn
+
+Bạn vẫn có thể dùng quy trình thủ công bên dưới:
+
 1. Sao chép file config mẫu:
 
 ```bash
@@ -113,6 +123,19 @@ http://localhost:9245
 ```
 
 Nếu bạn triển khai ứng dụng sau reverse proxy dưới một tiền tố như `/movie/`, hãy mở URL có tiền tố đó.
+
+---
+
+## Cấu Trúc Dự Án
+
+- `movies_server.py`: entrypoint Flask và nối route
+- `movies_server_core.py`: helper dùng chung phía server cho auth, config, cookie và xử lý mount path
+- `movies_catalog.py`: quét catalog, tạo thumbnail, trích xuất phụ đề và helper transcoding cục bộ
+- `movies_server_plex.py`: adapter Plex, ánh xạ poster/phụ đề và proxy Plex HLS
+- `movies.js`: mã nguồn frontend
+- `movies.min.js`: bundle frontend đã minify
+- `movies.css`: style của gallery và player
+- `passcode.py`: helper để xoay vòng passcode chế độ riêng tư
 
 ---
 
