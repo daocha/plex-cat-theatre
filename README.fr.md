@@ -565,4 +565,4 @@ Ces fichiers sont générés à l’exécution et ne doivent pas être commités
 
 ## Licence
 
-Ce dépôt ne déclare actuellement aucune licence logicielle. Ajoutez-en une explicitement si vous prévoyez de le redistribuer.
+Ce projet est publié sous licence MIT. Ajoutez un fichier `LICENSE` contenant le texte MIT lorsque vous le publiez ou le redistribuez.

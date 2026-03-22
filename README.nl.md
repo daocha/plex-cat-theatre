@@ -565,4 +565,4 @@ Deze bestanden worden tijdens runtime gegenereerd en mogen niet worden gecommit:
 
 ## Licentie
 
-Deze repository verklaart momenteel geen softwarelicentie. Voeg er expliciet een toe als je van plan bent het te herdistribueren.
+Dit project wordt uitgebracht onder de MIT License. Voeg bij publicatie of herdistributie een `LICENSE`-bestand met de MIT-tekst toe.

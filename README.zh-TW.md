@@ -565,4 +565,4 @@ python3 passcode.py mynewpasscode
 
 ## 授權條款
 
-本儲存庫目前未宣告軟體授權條款。若你打算重新散布它，請明確加入授權條款。
+本專案以 MIT License 發佈。若你打算發布或重新散布它，請加入包含 MIT 內容的 `LICENSE` 檔案。
