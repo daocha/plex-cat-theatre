@@ -1,6 +1,12 @@
 # Cat Theatre Movies Server
 
-> Self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`, with optional Plex integration for compatibility-focused playback.
+> Lightweight self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`, with optional _`Plex`_ integration for compatibility-focused playback.
+
+---
+
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+
+---
 
 **Languages**
 
@@ -48,19 +54,6 @@ It is designed for:
 
 ---
 
-## Project Structure
-
-- `movies_server.py`: Flask entrypoint and route wiring
-- `movies_server_core.py`: shared server helpers for auth, config, cookies, and mount-path handling
-- `movies_catalog.py`: catalog scanning, thumbnail generation, subtitle extraction, and local transcode helpers
-- `movies_server_plex.py`: Plex adapter, poster/subtitle mapping, and Plex HLS proxying
-- `movies.js`: frontend source
-- `movies.min.js`: minified frontend bundle
-- `movies.css`: gallery and player styles
-- `passcode.py`: helper for rotating the private-mode passcode
-
----
-
 ## Requirements
 
 ### Python
@@ -92,6 +85,23 @@ which ffprobe
 
 ## Quick Start
 
+Preferred startup method:
+
+```bash
+./startup.sh
+```
+
+This bootstrap script can:
+
+- create `movies_config.json` from the sample config on first run
+- create a local `.venv`
+- install Python dependencies into that local virtual environment
+- check `ffmpeg` and `ffprobe`
+- optionally help you generate the private-mode passcode hash
+- start the server with your local config
+
+You can still use the manual flow below:
+
 1. Copy the sample config:
 
 ```bash
@@ -113,6 +123,19 @@ http://localhost:9245
 ```
 
 If you deploy the app behind a reverse proxy under a prefix such as `/movie/`, open the prefixed URL instead.
+
+---
+
+## Project Structure
+
+- `movies_server.py`: Flask entrypoint and route wiring
+- `movies_server_core.py`: shared server helpers for auth, config, cookies, and mount-path handling
+- `movies_catalog.py`: catalog scanning, thumbnail generation, subtitle extraction, and local transcode helpers
+- `movies_server_plex.py`: Plex adapter, poster/subtitle mapping, and Plex HLS proxying
+- `movies.js`: frontend source
+- `movies.min.js`: minified frontend bundle
+- `movies.css`: gallery and player styles
+- `passcode.py`: helper for rotating the private-mode passcode
 
 ---
 
