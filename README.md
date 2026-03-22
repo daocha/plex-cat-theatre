@@ -565,4 +565,4 @@ These files are runtime-generated and should not be committed:
 
 ## License
 
-This repository does not currently declare a software license. Add one explicitly if you plan to redistribute it.
+This project is released under the MIT License. Add a `LICENSE` file containing the MIT text when publishing or redistributing it.
