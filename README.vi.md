@@ -565,4 +565,4 @@ Những tệp này được tạo lúc chạy và không nên commit:
 
 ## Giấy Phép
 
-Kho này hiện chưa khai báo giấy phép phần mềm. Hãy thêm rõ ràng nếu bạn định phân phối lại nó.
+Dự án này được phát hành theo MIT License. Khi phát hành hoặc phân phối lại, hãy thêm tệp `LICENSE` chứa đầy đủ nội dung MIT.
