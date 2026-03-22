@@ -1429,8 +1429,6 @@ class App:
         )
         self.host = cfg.get("host", "0.0.0.0")
         self.port = int(cfg.get("port", DEFAULT_PORT))
-        self.http_port = cfg.get("http_port", self.port)
-        self.https_port = cfg.get("https_port", self.port)
         ON_DEMAND_TRANSCODE = bool(cfg.get("on_demand_transcode", False))
         HWACCEL_CODEC = str(
             cfg.get("transcode_video_codec", "h264_videotoolbox")
@@ -1484,19 +1482,18 @@ class App:
                 daemon=True,
             ).start()
 
-        port = self.http_port or self.port
         logging.info(
             "Movies Server (Flask + Waitress) starting on %s:%s",
             self.host,
-            port,
+            self.port,
         )
-        logging.info("Access: http://localhost:%s", port)
+        logging.info("Access: http://localhost:%s", self.port)
         for handler in logging.getLogger().handlers:
             try:
                 handler.flush()
             except Exception:
                 pass
-        serve(app, host=self.host, port=port, threads=8, connection_limit=100)
+        serve(app, host=self.host, port=self.port, threads=8, connection_limit=100)
 
 
 def main():

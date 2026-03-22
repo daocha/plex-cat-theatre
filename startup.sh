@@ -110,8 +110,7 @@ if [[ -t 0 && -t 1 ]] && [[ -z "${CURRENT_PRIVATE_PASSCODE}" || "${CURRENT_PRIVA
 fi
 
 HOST="$(read_config_value "host")"
-HTTP_PORT="$(read_config_value "http_port")"
-PORT_FALLBACK="$(read_config_value "port")"
+PORT="$(read_config_value "port")"
 ROOTS="$(read_config_value "root")"
 PRIVATE_FOLDER="$(read_config_value "private_folder")"
 PLEX_ENABLED="$(read_config_value "enable_plex_server")"
@@ -123,8 +122,8 @@ if [[ -z "${HOST}" ]]; then
   HOST="0.0.0.0"
 fi
 
-if [[ -z "${HTTP_PORT}" ]]; then
-  HTTP_PORT="${PORT_FALLBACK:-9245}"
+if [[ -z "${PORT}" ]]; then
+  PORT="9245"
 fi
 
 DISPLAY_HOST="${HOST}"
@@ -150,7 +149,7 @@ echo "- mount_script: ${MOUNT_SCRIPT:-<empty>}"
 echo "- auto_scan_on_start: ${AUTO_SCAN:-false}"
 echo
 echo "Open Cat Theatre at:"
-echo "- http://${DISPLAY_HOST}:${HTTP_PORT}"
+echo "- http://${DISPLAY_HOST}:${PORT}"
 echo
 echo "Starting server..."
 exec "${PYTHON_BIN}" "${SCRIPT_DIR}/movies_server.py" --config "${CONFIG_PATH}"
