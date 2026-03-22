@@ -1,6 +1,12 @@
 # Cat Theatre Movies Server
 
-> Self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`, with optional Plex integration for compatibility-focused playback.
+> Lightweight self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`, with optional _`Plex`_ integration for compatibility-focused playback.
+
+---
+
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+
+---
 
 **Languages**
 
