@@ -1,6 +1,12 @@
 # Cat Theatre Movies Server
 
-> Flask、Waitress、`ffmpeg` で構築されたセルフホスト型の映画ブラウザ兼ストリーミングサーバーで、互換性重視の再生のために Plex 統合を任意で利用できます。
+> Flask、Waitress、`ffmpeg` で構築された軽量なセルフホスト型の映画ブラウザ兼ストリーミングサーバーで、互換性重視の再生のために _`Plex`_ 統合を任意で利用できます。
+
+---
+
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+
+---
 
 **言語**
 
@@ -48,19 +54,6 @@ Cat Theatre は意図的に軽量です。
 
 ---
 
-## プロジェクト構成
-
-- `movies_server.py`: Flask のエントリポイントとルーティング
-- `movies_server_core.py`: 認証、設定、Cookie、マウントパス処理の共通サーバーヘルパー
-- `movies_catalog.py`: カタログスキャン、サムネイル生成、字幕抽出、ローカルトランスコード補助
-- `movies_server_plex.py`: Plex アダプタ、ポスター/字幕マッピング、Plex HLS プロキシ
-- `movies.js`: フロントエンドソース
-- `movies.min.js`: 圧縮済みフロントエンドバンドル
-- `movies.css`: ギャラリーとプレイヤーのスタイル
-- `passcode.py`: プライベートモードのパスコードをローテーションする補助スクリプト
-
----
-
 ## 要件
 
 ### Python
@@ -92,6 +85,23 @@ which ffprobe
 
 ## クイックスタート
 
+推奨される起動方法:
+
+```bash
+./startup.sh
+```
+
+このブートストラップスクリプトは次のことを行えます。
+
+- 初回起動時にサンプル設定から `movies_config.json` を作成
+- ローカル `.venv` を作成
+- Python 依存関係をそのローカル仮想環境にインストール
+- `ffmpeg` と `ffprobe` を確認
+- 必要に応じてプライベートモード用パスコードのハッシュ生成を支援
+- ローカル設定でサーバーを起動
+
+以下の手動手順も引き続き利用できます。
+
 1. サンプル設定をコピーします。
 
 ```bash
@@ -113,6 +123,19 @@ http://localhost:9245
 ```
 
 `/movie/` のようなプレフィックス配下でリバースプロキシ運用している場合は、そのプレフィックス付き URL を開いてください。
+
+---
+
+## プロジェクト構成
+
+- `movies_server.py`: Flask のエントリポイントとルーティング
+- `movies_server_core.py`: 認証、設定、Cookie、マウントパス処理の共通サーバーヘルパー
+- `movies_catalog.py`: カタログスキャン、サムネイル生成、字幕抽出、ローカルトランスコード補助
+- `movies_server_plex.py`: Plex アダプタ、ポスター/字幕マッピング、Plex HLS プロキシ
+- `movies.js`: フロントエンドソース
+- `movies.min.js`: 圧縮済みフロントエンドバンドル
+- `movies.css`: ギャラリーとプレイヤーのスタイル
+- `passcode.py`: プライベートモードのパスコードをローテーションする補助スクリプト
 
 ---
 

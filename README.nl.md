@@ -1,6 +1,12 @@
 # Cat Theatre Movies Server
 
-> Zelfgehoste filmbrowser en streamingserver gebouwd met Flask, Waitress en `ffmpeg`, met optionele Plex-integratie voor een afspeelpad dat meer op compatibiliteit gericht is.
+> Lichtgewicht zelfgehoste filmbrowser en streamingserver gebouwd met Flask, Waitress en `ffmpeg`, met optionele _`Plex`_-integratie voor compatibiliteitsgerichte weergave.
+
+---
+
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+
+---
 
 **Talen**
 
@@ -48,19 +54,6 @@ Het is ontworpen voor:
 
 ---
 
-## Projectstructuur
-
-- `movies_server.py`: Flask-entrypoint en routekoppeling
-- `movies_server_core.py`: gedeelde serverhelpers voor auth, config, cookies en afhandeling van mountpaden
-- `movies_catalog.py`: catalogusscan, thumbnailgeneratie, ondertitelextractie en lokale transcodinghelpers
-- `movies_server_plex.py`: Plex-adapter, poster-/ondertitelmapping en Plex HLS-proxying
-- `movies.js`: frontendbroncode
-- `movies.min.js`: geminificeerde frontendbundle
-- `movies.css`: stijlen voor galerij en speler
-- `passcode.py`: helper voor het roteren van de privémodus-passcode
-
----
-
 ## Vereisten
 
 ### Python
@@ -92,6 +85,23 @@ which ffprobe
 
 ## Snel Starten
 
+Voorkeursmanier om te starten:
+
+```bash
+./startup.sh
+```
+
+Dit bootstrapscript kan:
+
+- bij de eerste keer opstarten `movies_config.json` maken vanuit de voorbeeldconfiguratie
+- een lokale `.venv` aanmaken
+- Python-afhankelijkheden in die lokale virtuele omgeving installeren
+- `ffmpeg` en `ffprobe` controleren
+- optioneel helpen bij het genereren van de hash voor de privémodus-passcode
+- de server starten met je lokale configuratie
+
+Je kunt nog steeds de handmatige stappen hieronder gebruiken:
+
 1. Kopieer de voorbeeldconfiguratie:
 
 ```bash
@@ -113,6 +123,19 @@ http://localhost:9245
 ```
 
 Als je de app achter een reverse proxy onder een prefix zoals `/movie/` inzet, open dan de URL met prefix.
+
+---
+
+## Projectstructuur
+
+- `movies_server.py`: Flask-entrypoint en routekoppeling
+- `movies_server_core.py`: gedeelde serverhelpers voor auth, config, cookies en afhandeling van mountpaden
+- `movies_catalog.py`: catalogusscan, thumbnailgeneratie, ondertitelextractie en lokale transcodinghelpers
+- `movies_server_plex.py`: Plex-adapter, poster-/ondertitelmapping en Plex HLS-proxying
+- `movies.js`: frontendbroncode
+- `movies.min.js`: geminificeerde frontendbundle
+- `movies.css`: stijlen voor galerij en speler
+- `passcode.py`: helper voor het roteren van de privémodus-passcode
 
 ---
 

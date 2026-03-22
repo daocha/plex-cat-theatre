@@ -1,6 +1,12 @@
 # Cat Theatre Movies Server
 
-> Flask, Waitress, `ffmpeg`로 구성된 자체 호스팅 영화 브라우저 및 스트리밍 서버이며, 호환성 중심 재생을 위해 선택적으로 Plex를 통합할 수 있습니다.
+> Flask, Waitress, `ffmpeg`로 구성된 경량 자체 호스팅 영화 브라우저 및 스트리밍 서버이며, 호환성 중심 재생을 위해 선택적으로 _`Plex`_ 통합을 사용할 수 있습니다.
+
+---
+
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+
+---
 
 **언어**
 
@@ -48,19 +54,6 @@ Cat Theatre는 의도적으로 가볍게 설계되었습니다.
 
 ---
 
-## 프로젝트 구조
-
-- `movies_server.py`: Flask 진입점 및 라우팅 연결
-- `movies_server_core.py`: 인증, 설정, 쿠키, 마운트 경로 처리를 위한 공용 서버 헬퍼
-- `movies_catalog.py`: 카탈로그 스캔, 썸네일 생성, 자막 추출, 로컬 트랜스코딩 헬퍼
-- `movies_server_plex.py`: Plex 어댑터, 포스터/자막 매핑, Plex HLS 프록시
-- `movies.js`: 프론트엔드 소스
-- `movies.min.js`: 압축된 프론트엔드 번들
-- `movies.css`: 갤러리 및 플레이어 스타일
-- `passcode.py`: 비공개 모드 비밀번호를 교체하는 헬퍼
-
----
-
 ## 요구 사항
 
 ### Python
@@ -92,6 +85,23 @@ which ffprobe
 
 ## 빠른 시작
 
+권장 시작 방법:
+
+```bash
+./startup.sh
+```
+
+이 부트스트랩 스크립트는 다음을 수행할 수 있습니다.
+
+- 첫 실행 시 샘플 설정으로부터 `movies_config.json` 생성
+- 로컬 `.venv` 생성
+- Python 의존성을 해당 로컬 가상환경에 설치
+- `ffmpeg` 및 `ffprobe` 확인
+- 선택적으로 비공개 모드 비밀번호 해시 생성 지원
+- 로컬 설정으로 서버 시작
+
+아래의 수동 절차도 계속 사용할 수 있습니다.
+
 1. 샘플 설정을 복사합니다.
 
 ```bash
@@ -113,6 +123,19 @@ http://localhost:9245
 ```
 
 앱을 `/movie/` 같은 프리픽스로 리버스 프록시 뒤에 배포했다면 프리픽스가 포함된 URL을 여십시오.
+
+---
+
+## 프로젝트 구조
+
+- `movies_server.py`: Flask 진입점 및 라우팅 연결
+- `movies_server_core.py`: 인증, 설정, 쿠키, 마운트 경로 처리를 위한 공용 서버 헬퍼
+- `movies_catalog.py`: 카탈로그 스캔, 썸네일 생성, 자막 추출, 로컬 트랜스코딩 헬퍼
+- `movies_server_plex.py`: Plex 어댑터, 포스터/자막 매핑, Plex HLS 프록시
+- `movies.js`: 프론트엔드 소스
+- `movies.min.js`: 압축된 프론트엔드 번들
+- `movies.css`: 갤러리 및 플레이어 스타일
+- `passcode.py`: 비공개 모드 비밀번호를 교체하는 헬퍼
 
 ---
 
