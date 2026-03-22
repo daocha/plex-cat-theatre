@@ -565,4 +565,4 @@ python3 passcode.py mynewpasscode
 
 ## 许可证
 
-本仓库当前未声明软件许可证。如果你计划重新分发它，请明确添加许可证。
+本项目基于 MIT License 发布。若你要发布或重新分发它，请添加包含 MIT 文本的 `LICENSE` 文件。

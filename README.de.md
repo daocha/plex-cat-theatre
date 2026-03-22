@@ -565,4 +565,4 @@ Diese Dateien werden zur Laufzeit erzeugt und sollten nicht committed werden:
 
 ## Lizenz
 
-Dieses Repository deklariert derzeit keine Softwarelizenz. Füge explizit eine hinzu, wenn du es weiterverteilen willst.
+Dieses Projekt wird unter der MIT License veröffentlicht. Füge beim Veröffentlichen oder Weiterverteilen eine `LICENSE`-Datei mit dem MIT-Text hinzu.
