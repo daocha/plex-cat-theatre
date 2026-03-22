@@ -1,23 +1,23 @@
 {
+  "debug_enabled": false,
   "root": [
     "~/Movies",
     "~/TV"
   ],
-  "port": 9245,
-  "host": "0.0.0.0",
-  "thumbs_dir": "./cache/thumbnails",
-  "mount_script": "",
-  "locale": "auto",
   "private_folder": [
     "Private"
   ],
+  "thumbs_dir": "./cache/thumbnails",
+  "port": 9245,
+  "host": "0.0.0.0",
+  "mount_script": "",
+  "locale": "auto",
   "transcode": false,
   "on_demand_transcode": true,
   "on_demand_hls": true,
   "transcode_video_codec": "h264_videotoolbox",
-  "private_passcode": "sha256:replace-with-your-passcode-hash",
-  "enable_plex_server": true,
   "auto_scan_on_start": false,
+  "enable_plex_server": false,
   "plex": {
     "base_url": "http://127.0.0.1:32400",
     "token": "",
@@ -25,12 +25,12 @@
     "refresh_interval_seconds": 120,
     "prefer_transcode": false
   },
-  "debug_enabled": false,
   "direct_playback": {
     "enabled": true,
     "audio_whitelist": [
       "aac",
       "mp3"
     ]
-  }
+  },
+  "private_passcode": "sha256:replace-with-your-passcode-hash"
 }
