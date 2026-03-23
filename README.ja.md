@@ -85,6 +85,14 @@ which ffprobe
 
 ## クイックスタート
 
+PyPI で公開されたパッケージをインストールする場合は、次を使用します。
+
+```bash
+pip install plex-cat-theatre
+plex-cat-theatre-init
+plex-cat-theatre --config ~/movies_config.json
+```
+
 推奨される起動方法:
 
 ```bash

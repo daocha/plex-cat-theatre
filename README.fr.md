@@ -85,6 +85,14 @@ which ffprobe
 
 ## Démarrage Rapide
 
+Si vous installez le paquet publié sur PyPI, utilisez :
+
+```bash
+pip install plex-cat-theatre
+plex-cat-theatre-init
+plex-cat-theatre --config ~/movies_config.json
+```
+
 Méthode de démarrage recommandée :
 
 ```bash
