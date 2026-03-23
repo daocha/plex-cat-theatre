@@ -1051,12 +1051,12 @@ function getCandidateFallbackDelay(url) {
   if (!s) return 3200;
   if (s.includes(".m3u8")) {
     // Plex HLS can take a second or two to finish manifest/segment delivery on macOS
-    if (isIOSLike()) return 10000;
-    return 9000;
+    if (isIOSLike()) return 15000;
+    return 10000;
   }
-  if (isDesktopClient()) return 5000;
-  if (isIOSLike()) return 5000;
-  return 3200;
+  if (isDesktopClient()) return 30000;
+  if (isIOSLike()) return 30000;
+  return 5000;
 }
 function autoHideNativeControls() {
   if (!isIOSLike()) return;

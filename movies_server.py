@@ -7,6 +7,7 @@ import argparse
 import logging
 import math
 import mimetypes
+import re
 import subprocess
 import threading
 import urllib.error
