@@ -4,15 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import math
 import mimetypes
 import re
-import shlex
 import subprocess
 import threading
-import time
 import urllib.error
 import urllib.parse
 from pathlib import Path
@@ -51,6 +48,20 @@ from movies_server_core import (
     setup_logging,
     verify_passcode,
 )
+from movies_server_auth import (
+    can_access_private as auth_can_access_private,
+    require_media_access as auth_require_media_access,
+    resolve_private_visibility as auth_resolve_private_visibility,
+)
+from movies_server_locale import SUPPORTED_LOCALES, ServerLocalizer
+from movies_server_media import (
+    build_plex_hls_proxy_url,
+    ensure_media_id_ready as media_ensure_media_id_ready,
+    ensure_media_path_ready as media_ensure_media_path_ready,
+    extract_video_id_from_referer,
+    normalize_subtitle_to_vtt,
+)
+from movies_server_overlay import PlexOverlayCoordinator
 from movies_server_plex import PlexAdapter
 
 app = Flask(__name__)
@@ -59,13 +70,6 @@ app.wsgi_app = StripPrefixMiddleware(app.wsgi_app)
 
 catalog = None
 plex_adapter: PlexAdapter | None = None
-PLEX_OVERLAY_LOCK = threading.Lock()
-PLEX_OVERLAY_RUNNING = False
-PLEX_OVERLAY_PENDING = False
-PLEX_OVERLAY_PENDING_PERSIST = False
-PLEX_OVERLAY_PENDING_FORCE = False
-PLEX_OVERLAY_LAST_RUN = 0.0
-PLEX_OVERLAY_MIN_INTERVAL = 3.0
 APP_INSTANCE = None
 ON_DEMAND_TRANSCODE = False
 HWACCEL_CODEC = "h264_videotoolbox"
@@ -83,22 +87,8 @@ APPROVED_PRIVATE_DEVICES: set[str] = set()
 PRIVATE_STATE_LOCK = threading.Lock()
 AUTH_STATE_LOCK = threading.Lock()
 AUTH_FAILURES: dict = {}
-DEFAULT_LOCALE = "en"
-SUPPORTED_LOCALES = {
-    "en",
-    "zh-CN",
-    "zh-HK",
-    "zh-TW",
-    "fr",
-    "ko",
-    "ja",
-    "de",
-    "th",
-    "vi",
-    "nl",
-}
-SERVER_LOCALE_DIR = Path(__file__).with_name("server_locales")
-SERVER_LOCALE_CACHE: dict[str, dict[str, str]] = {}
+localizer = ServerLocalizer()
+plex_overlay = PlexOverlayCoordinator(min_interval=3.0)
 
 
 @app.after_request
@@ -121,350 +111,79 @@ def persist_device_cookie(resp):
 
 
 def can_access_private(device_id: str, passcode: str = "") -> bool:
-    if not catalog.private_folders:
-        return True
-    if device_id and device_id in APPROVED_PRIVATE_DEVICES:
-        return True
-    if passcode and verify_passcode(passcode, catalog.private_passcode):
-        return True
-    return False
+    return auth_can_access_private(
+        catalog,
+        APPROVED_PRIVATE_DEVICES,
+        verify_passcode,
+        device_id,
+        passcode=passcode,
+    )
 
 
 def resolve_private_visibility() -> tuple[bool, bool]:
-    device_id = extract_device_id()
-    passcode = str(
-        request.args.get("passcode", "")
-        or request.headers.get("X-Private-Passcode", "")
-    ).strip()
-    authorized = bool(device_id and device_id in APPROVED_PRIVATE_DEVICES)
-    allow_private = authorized or bool(
-        passcode and verify_passcode(passcode, catalog.private_passcode)
+    return auth_resolve_private_visibility(
+        catalog,
+        APPROVED_PRIVATE_DEVICES,
+        verify_passcode,
+        extract_device_id,
     )
-    return allow_private, authorized
-
-
-def require_media_access(video_id: str) -> tuple[bool, tuple]:
-    if not catalog.is_private_id(video_id):
-        return True, (None, None)
-    device_id = extract_device_id()
-    passcode = str(
-        request.args.get("passcode", "")
-        or request.headers.get("X-Private-Passcode", "")
-    ).strip()
-    if can_access_private(device_id, passcode=passcode):
-        return True, (None, None)
-    return False, localized_json_error("forbidden_private", 403)
-
-
-def normalize_locale_code(value: str) -> str:
-    raw = str(value or "").strip().replace("_", "-")
-    if not raw:
-        return ""
-    if raw in SUPPORTED_LOCALES:
-        return raw
-    lowered = raw.lower()
-    if lowered in {"zh", "zh-hans", "zh-sg", "zh-my"}:
-        return "zh-CN"
-    if lowered in {"zh-hant"}:
-        return "zh-TW"
-    parts = raw.split("-")
-    base = parts[0].lower()
-    if base == "zh":
-        region = (parts[1] if len(parts) > 1 else "").lower()
-        if region in {"hk", "mo"}:
-            return "zh-HK"
-        if region in {"tw", "hant"}:
-            return "zh-TW"
-        return "zh-CN"
-    for supported in SUPPORTED_LOCALES:
-        if supported.lower() == base:
-            return supported
-    return ""
-
-
-def request_locale() -> str:
-    requested = normalize_locale_code(str(request.headers.get("X-UI-Locale", "") or ""))
-    if requested:
-        return requested
-    cookie_locale = normalize_locale_code(str(request.cookies.get("movies_ui_locale", "") or ""))
-    if cookie_locale:
-        return cookie_locale
-    configured = normalize_locale_code(str(cfg_runtime.get("locale", "") or ""))
-    if configured and configured != "auto":
-        return configured
-    accept = str(request.headers.get("Accept-Language", "") or "")
-    for chunk in accept.split(","):
-        code = normalize_locale_code(chunk.split(";", 1)[0])
-        if code:
-            return code
-    return DEFAULT_LOCALE
-
-
-def load_server_locale_bundle(locale: str) -> dict[str, str]:
-    normalized = normalize_locale_code(locale) or DEFAULT_LOCALE
-    cached = SERVER_LOCALE_CACHE.get(normalized)
-    if cached is not None:
-        return cached
-    path = SERVER_LOCALE_DIR / f"{normalized}.json"
-    try:
-        bundle = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        if normalized != DEFAULT_LOCALE:
-            bundle = load_server_locale_bundle(DEFAULT_LOCALE)
-        else:
-            bundle = {}
-    SERVER_LOCALE_CACHE[normalized] = bundle
-    return bundle
 
 
 def localized_message(message_key: str) -> str:
-    locale = request_locale()
-    table = load_server_locale_bundle(locale)
-    fallback = load_server_locale_bundle(DEFAULT_LOCALE)
-    return table.get(message_key, fallback.get(message_key, message_key))
+    return localizer.localized_message(cfg_runtime.get("locale", "auto"), message_key)
 
 
 def localized_json_error(error_key: str, status: int, **extra):
-    payload = {"error": error_key, "message": localized_message(error_key)}
-    payload.update(extra)
-    return jsonify(payload), status
+    return localizer.localized_json_error(
+        cfg_runtime.get("locale", "auto"),
+        error_key,
+        status,
+        **extra,
+    )
 
 
-def build_plex_hls_proxy_url(
-    target_url: str,
-    mount_root: str = "",
-    relative_mode: str = "absolute",
-) -> str:
-    clean_target = str(target_url or "").strip()
-    if relative_mode == "from_video":
-        proxy_path = "../hls/proxy?"
-    elif relative_mode == "from_proxy":
-        proxy_path = "?"
-    else:
-        proxy_path = (
-            (mount_root.rstrip("/") + "/plex/hls/proxy")
-            if mount_root
-            else "/plex/hls/proxy"
-        ) + "?"
-    query = urllib.parse.urlencode({"u": clean_target, "root": mount_root or ""})
-    return proxy_path + query
-
-
-def extract_video_id_from_referer(value: str) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    try:
-        path = urllib.parse.urlparse(raw).path
-    except Exception:
-        path = raw
-    match = re.search(r"/plex/video/([^/?#]+?)(?:\.m3u8)?$", path)
-    if match:
-        return urllib.parse.unquote(match.group(1))
-    match = re.search(r"/video/([^/?#]+)$", path)
-    if match:
-        return urllib.parse.unquote(match.group(1))
-    return ""
-
-
-def run_mount_script() -> bool:
-    command_text = str(cfg_runtime.get("mount_script", "") or "").strip()
-    if not command_text:
-        return False
-    try:
-        command = shlex.split(command_text)
-        if not command:
-            return False
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=45,
-        )
-        if completed.returncode == 0:
-            logging.info("Mount script succeeded: %s", command_text)
-            return True
-        logging.warning(
-            "Mount script failed: rc=%d stdout=%r stderr=%r",
-            completed.returncode,
-            completed.stdout.strip(),
-            completed.stderr.strip(),
-        )
-    except Exception as exc:
-        logging.warning("Mount script execution failed: %s", exc)
-    return False
+def require_media_access(video_id: str) -> tuple[bool, tuple]:
+    return auth_require_media_access(
+        catalog,
+        APPROVED_PRIVATE_DEVICES,
+        verify_passcode,
+        extract_device_id,
+        localized_json_error,
+        video_id,
+    )
 
 
 def ensure_media_path_ready(media_path: Path | None) -> tuple[Path | None, tuple[str, int] | None]:
-    if media_path and media_path.exists():
-        return media_path, None
-    folder = media_path.parent if media_path else None
-    folder_missing = bool(folder and not folder.exists())
-    if folder_missing and str(cfg_runtime.get("mount_script", "") or "").strip():
-        logging.info("Media folder missing, attempting mount recovery: %s", folder)
-        run_mount_script()
-        if media_path and media_path.exists():
-            return media_path, None
-        folder_missing = bool(folder and not folder.exists())
-    if folder_missing:
-        return None, (localized_message("media_folder_not_mounted"), 404)
-    return None, (localized_message("file_not_found"), 404)
+    return media_ensure_media_path_ready(
+        media_path,
+        str(cfg_runtime.get("mount_script", "") or "").strip(),
+        localized_message,
+    )
 
 
 def ensure_media_id_ready(video_id: str) -> tuple[Path | None, tuple[str, int] | None]:
-    return ensure_media_path_ready(catalog.video_map.get(urllib.parse.unquote(video_id)))
-
-
-def _ass_time_to_vtt(value: str) -> str:
-    raw = str(value or "").strip()
-    match = re.match(r"(?:(\d+):)?(\d{1,2}):(\d{2})[.](\d{1,2})", raw)
-    if not match:
-        return "00:00:00.000"
-    hours = int(match.group(1) or 0)
-    minutes = int(match.group(2) or 0)
-    seconds = int(match.group(3) or 0)
-    centis = int(match.group(4) or 0)
-    millis = centis * 10
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
-
-
-def _strip_ass_text_markup(text: str) -> str:
-    out = str(text or "")
-    out = out.replace("\\N", "\n").replace("\\n", "\n").replace("\\h", " ")
-    out = re.sub(r"\{[^}]*\}", "", out)
-    return out.strip()
-
-
-def normalize_subtitle_to_vtt(body: bytes, content_type: str = "") -> bytes:
-    raw = body or b""
-    text = raw.decode("utf-8", errors="ignore").lstrip("\ufeff")
-    if not text.strip():
-        return b"WEBVTT\n\n"
-
-    if text.lstrip().startswith("WEBVTT"):
-        return text.encode("utf-8")
-
-    lowered_ctype = str(content_type or "").lower()
-    lowered_text = text.lower()
-
-    if "[script info]" in lowered_text or "\ndialogue:" in lowered_text or lowered_ctype.endswith("/x-ass"):
-        cues = ["WEBVTT", ""]
-        for line in text.splitlines():
-            if not line.startswith("Dialogue:"):
-                continue
-            payload = line.split(":", 1)[1].lstrip()
-            parts = payload.split(",", 9)
-            if len(parts) < 10:
-                continue
-            start = _ass_time_to_vtt(parts[1])
-            end = _ass_time_to_vtt(parts[2])
-            cue_text = _strip_ass_text_markup(parts[9])
-            if not cue_text:
-                continue
-            cues.extend([f"{start} --> {end}", cue_text, ""])
-        return ("\n".join(cues).strip() + "\n").encode("utf-8")
-
-    # Treat remaining text subtitles as SRT-like and normalize timestamps for VTT.
-    text = re.sub(r"(\d{2}:\d{2}:\d{2}),(\d{3})", r"\1.\2", text)
-    if not text.lstrip().startswith("WEBVTT"):
-        text = "WEBVTT\n\n" + text
-    return text.encode("utf-8")
+    return media_ensure_media_id_ready(
+        catalog.video_map,
+        video_id,
+        str(cfg_runtime.get("mount_script", "") or "").strip(),
+        localized_message,
+    )
 
 
 def ensure_plex_catalog_binding(force_refresh: bool = False):
-    if not plex_adapter or not plex_adapter.enabled or not catalog:
-        return
-    try:
-        if force_refresh or not getattr(plex_adapter, "_items_by_file", None):
-            plex_adapter.refresh()
-        plex_adapter.bind_catalog(catalog.video_map)
-    except Exception:
-        try:
-            plex_adapter.bind_catalog(catalog.video_map)
-        except Exception:
-            pass
-
-
-def rebuild_plex_overlay_into_catalog(persist_index: bool = True):
-    if not plex_adapter or not plex_adapter.enabled:
-        return
-    try:
-        plex_adapter.bind_catalog(catalog.video_map)
-        with catalog._lock:
-            base_items = list(catalog._videos)
-        merged_items = [
-            plex_adapter.overlay_item(str(video.get("id", "")), video)
-            for video in base_items
-        ]
-        with catalog._lock:
-            catalog._videos = merged_items
-            if not catalog.is_scanning:
-                catalog._public_videos = list(merged_items)
-                catalog._public_private_video_ids = {
-                    video.get("id", "")
-                    for video in merged_items
-                    if catalog._is_private_video(video)
-                }
-        if persist_index:
-            catalog._save_index(Path(__file__).with_name("movies_catalog_index.json"))
-    except Exception as exc:
-        logging.warning("Plex overlay rebuild failed: %s", exc)
+    plex_overlay._ensure_binding(plex_adapter, catalog, force_refresh=force_refresh)
 
 
 def schedule_plex_overlay_refresh(
     persist_index: bool = False,
     force_refresh: bool = False,
 ):
-    global PLEX_OVERLAY_RUNNING, PLEX_OVERLAY_PENDING, PLEX_OVERLAY_PENDING_PERSIST
-    global PLEX_OVERLAY_PENDING_FORCE, PLEX_OVERLAY_LAST_RUN
-    if not plex_adapter or not plex_adapter.enabled:
-        return
-
-    def _run():
-        global PLEX_OVERLAY_RUNNING, PLEX_OVERLAY_PENDING, PLEX_OVERLAY_PENDING_PERSIST
-        global PLEX_OVERLAY_PENDING_FORCE, PLEX_OVERLAY_LAST_RUN
-        while True:
-            pending_persist = False
-            pending_force = False
-            with PLEX_OVERLAY_LOCK:
-                now = time.time()
-                if (not PLEX_OVERLAY_PENDING_FORCE) and (
-                    now - PLEX_OVERLAY_LAST_RUN < PLEX_OVERLAY_MIN_INTERVAL
-                ):
-                    delay = PLEX_OVERLAY_MIN_INTERVAL - (now - PLEX_OVERLAY_LAST_RUN)
-                else:
-                    delay = 0.0
-            if delay > 0:
-                time.sleep(delay)
-            with PLEX_OVERLAY_LOCK:
-                pending_persist = PLEX_OVERLAY_PENDING_PERSIST
-                pending_force = PLEX_OVERLAY_PENDING_FORCE
-                PLEX_OVERLAY_PENDING = False
-                PLEX_OVERLAY_PENDING_PERSIST = False
-                PLEX_OVERLAY_PENDING_FORCE = False
-            try:
-                ensure_plex_catalog_binding(force_refresh=pending_force)
-                rebuild_plex_overlay_into_catalog(persist_index=pending_persist)
-            finally:
-                with PLEX_OVERLAY_LOCK:
-                    PLEX_OVERLAY_LAST_RUN = time.time()
-                    rerun = bool(PLEX_OVERLAY_PENDING)
-                    if not rerun:
-                        PLEX_OVERLAY_RUNNING = False
-            if not rerun:
-                break
-
-    with PLEX_OVERLAY_LOCK:
-        PLEX_OVERLAY_PENDING = True
-        PLEX_OVERLAY_PENDING_PERSIST = (
-            PLEX_OVERLAY_PENDING_PERSIST or persist_index
-        )
-        PLEX_OVERLAY_PENDING_FORCE = PLEX_OVERLAY_PENDING_FORCE or force_refresh
-        if PLEX_OVERLAY_RUNNING:
-            return
-        PLEX_OVERLAY_RUNNING = True
-    threading.Thread(target=_run, daemon=True).start()
+    plex_overlay.schedule(
+        plex_adapter,
+        catalog,
+        persist_index=persist_index,
+        force_refresh=force_refresh,
+    )
 
 
 @app.route("/")
