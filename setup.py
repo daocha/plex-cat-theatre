@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parent
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 PY_MODULES = [
+    "cat_theatre_init",
     "movies",
     "movies_catalog",
     "movies_catalog_index",
@@ -55,6 +56,7 @@ setup(
     include_package_data=True,
     entry_points={
         "console_scripts": [
+            "cat-theatre-init=cat_theatre_init:main",
             "cat-theatre-server=movies_server:main",
             "cat-theatre-passcode=passcode:main",
         ]

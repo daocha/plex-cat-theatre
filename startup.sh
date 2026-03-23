@@ -6,6 +6,7 @@ set -euo pipefail
 # creates a working config from the sample on first run, and starts the server.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
 CONFIG_PATH="${SCRIPT_DIR}/movies_config.json"
 SAMPLE_CONFIG_PATH="${SCRIPT_DIR}/movies_config.sample.json"
 VENV_PATH="${SCRIPT_DIR}/.venv"
@@ -59,6 +60,29 @@ write_private_passcode() {
   "${PYTHON_BIN}" "${SCRIPT_DIR}/passcode.py" "${passcode}" --config "${CONFIG_PATH}" >/dev/null
 }
 
+ensure_thumbs_dir_from_config() {
+  "${PYTHON_BIN}" - "${CONFIG_PATH}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+cfg_path = Path(sys.argv[1]).expanduser().resolve()
+with cfg_path.open("r", encoding="utf-8") as handle:
+    cfg = json.load(handle)
+
+thumbs_dir = str(cfg.get("thumbs_dir", "") or "").strip()
+if not thumbs_dir:
+    thumbs_path = cfg_path.parent / "cache" / "thumbnails"
+else:
+    thumbs_path = Path(thumbs_dir).expanduser()
+    if not thumbs_path.is_absolute():
+        thumbs_path = cfg_path.parent / thumbs_path
+
+thumbs_path.mkdir(parents=True, exist_ok=True)
+print(thumbs_path.resolve())
+PY
+}
+
 echo "== Cat Theatre startup =="
 
 require_cmd python3 "Install Python 3 first."
@@ -77,8 +101,6 @@ if [[ ! -f "${CONFIG_PATH}" ]]; then
   echo
 fi
 
-mkdir -p "${SCRIPT_DIR}/cache/thumbnails"
-
 if [[ ! -d "${VENV_PATH}" ]]; then
   echo "Creating local virtual environment at ${VENV_PATH}"
   python3 -m venv "${VENV_PATH}"
@@ -87,6 +109,8 @@ fi
 # Upgrade pip first so a clean machine can install requirements more reliably.
 "${PYTHON_BIN}" -m pip install --upgrade pip >/dev/null
 "${PIP_BIN}" install -r "${SCRIPT_DIR}/requirements.txt"
+
+THUMBS_PATH="$(ensure_thumbs_dir_from_config)"
 
 CURRENT_PRIVATE_PASSCODE="$(read_config_value "private_passcode")"
 if [[ -t 0 && -t 1 ]] && [[ -z "${CURRENT_PRIVATE_PASSCODE}" || "${CURRENT_PRIVATE_PASSCODE}" == "sha256:replace-with-your-passcode-hash" ]]; then
@@ -147,6 +171,7 @@ echo "- enable_plex_server: ${PLEX_ENABLED:-false}"
 echo "- plex.base_url: ${PLEX_BASE_URL:-<empty>}"
 echo "- mount_script: ${MOUNT_SCRIPT:-<empty>}"
 echo "- auto_scan_on_start: ${AUTO_SCAN:-false}"
+echo "- thumbs_dir: ${THUMBS_PATH:-<empty>}"
 echo
 echo "Open Cat Theatre at:"
 echo "- http://${DISPLAY_HOST}:${PORT}"
