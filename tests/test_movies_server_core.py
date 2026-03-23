@@ -64,6 +64,25 @@ class LoadConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "locale"):
             load_config(path)
 
+    def test_load_config_normalizes_common_locale_variants(self):
+        path = self.write_config(
+            {
+                "root": ["~/Movies"],
+                "locale": "fr_FR",
+            }
+        )
+        cfg = load_config(path)
+        self.assertEqual(cfg["locale"], "fr")
+
+        path = self.write_config(
+            {
+                "root": ["~/Movies"],
+                "locale": "zh-cn",
+            }
+        )
+        cfg = load_config(path)
+        self.assertEqual(cfg["locale"], "zh-CN")
+
 
 if __name__ == "__main__":
     unittest.main()

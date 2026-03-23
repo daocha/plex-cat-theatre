@@ -16,6 +16,8 @@ class PlexOverlayCoordinator:
         self._pending = False
         self._pending_persist = False
         self._pending_force = False
+        self._adapter = None
+        self._catalog = None
         self._last_run = 0.0
         self._min_interval = float(min_interval)
 
@@ -57,6 +59,17 @@ class PlexOverlayCoordinator:
         except Exception as exc:
             logging.warning("Plex overlay rebuild failed: %s", exc)
 
+    def _consume_pending_state(self):
+        with self._lock:
+            pending_persist = self._pending_persist
+            pending_force = self._pending_force
+            adapter = self._adapter
+            catalog = self._catalog
+            self._pending = False
+            self._pending_persist = False
+            self._pending_force = False
+        return adapter, catalog, pending_persist, pending_force
+
     def schedule(
         self,
         adapter,
@@ -79,15 +92,10 @@ class PlexOverlayCoordinator:
                         delay = 0.0
                 if delay > 0:
                     time.sleep(delay)
-                with self._lock:
-                    pending_persist = self._pending_persist
-                    pending_force = self._pending_force
-                    self._pending = False
-                    self._pending_persist = False
-                    self._pending_force = False
+                adapter_current, catalog_current, pending_persist, pending_force = self._consume_pending_state()
                 try:
-                    self._ensure_binding(adapter, catalog, force_refresh=pending_force)
-                    self._rebuild_overlay(adapter, catalog, persist_index=pending_persist)
+                    self._ensure_binding(adapter_current, catalog_current, force_refresh=pending_force)
+                    self._rebuild_overlay(adapter_current, catalog_current, persist_index=pending_persist)
                 finally:
                     with self._lock:
                         self._last_run = time.time()
@@ -98,6 +106,8 @@ class PlexOverlayCoordinator:
                     break
 
         with self._lock:
+            self._adapter = adapter
+            self._catalog = catalog
             self._pending = True
             self._pending_persist = self._pending_persist or persist_index
             self._pending_force = self._pending_force or force_refresh

@@ -22,6 +22,14 @@ TRUE_VALUES = {"1", "true", "yes", "on"}
 UNLOCK_MAX_ATTEMPTS = 5
 UNLOCK_COOLDOWN_SECONDS = 3600
 SUPPORTED_LOCALES = {"auto", "en", "zh-CN", "zh-HK", "zh-TW", "fr", "ko", "ja", "de", "th", "vi", "nl"}
+LOCALE_ALIASES = {
+    "zh": "zh-CN",
+    "zh-hans": "zh-CN",
+    "zh-sg": "zh-CN",
+    "zh-my": "zh-CN",
+    "zh-hant": "zh-TW",
+    "zh-mo": "zh-HK",
+}
 
 
 def hash_passcode_sha256(passcode: str) -> str:
@@ -327,6 +335,30 @@ def _normalize_string_list(value, field_name: str) -> list[str]:
     return normalized
 
 
+def normalize_locale_code(locale: str) -> str:
+    raw = str(locale or "").strip()
+    if not raw:
+        return ""
+    canonical = raw.replace("_", "-")
+    if canonical in SUPPORTED_LOCALES:
+        return canonical
+    lower = canonical.lower()
+    if lower in LOCALE_ALIASES:
+        return LOCALE_ALIASES[lower]
+    parts = canonical.split("-")
+    if parts and parts[0].lower() == "zh":
+        script = (parts[1] if len(parts) > 1 else "").lower()
+        region = (parts[1] if len(parts) > 1 else (parts[2] if len(parts) > 2 else "")).lower()
+        if script == "hant" or region in {"tw", "hk", "mo"}:
+            return "zh-HK" if region in {"hk", "mo"} else "zh-TW"
+        return "zh-CN"
+    base = parts[0].lower() if parts else ""
+    for code in SUPPORTED_LOCALES:
+        if code.lower() == base:
+            return code
+    return ""
+
+
 def validate_and_normalize_config(cfg: dict, path: Path) -> Dict:
     if not isinstance(cfg, dict):
         raise ValueError("Config root must be a JSON object")
@@ -349,7 +381,7 @@ def validate_and_normalize_config(cfg: dict, path: Path) -> Dict:
     _ensure_string_field(cfg, "mount_script")
     _ensure_string_field(cfg, "transcode_video_codec")
 
-    locale = str(cfg.get("locale", "auto") or "auto").strip()
+    locale = normalize_locale_code(str(cfg.get("locale", "auto") or "auto").strip())
     if locale not in SUPPORTED_LOCALES:
         raise ValueError(
             "Config field 'locale' must be one of: "
