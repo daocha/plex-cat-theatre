@@ -13,9 +13,9 @@ import threading
 import urllib.error
 import urllib.parse
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
-from flask import Flask, Response, jsonify, redirect, request, send_file
+from flask import Flask, Response, abort, jsonify, redirect, request, send_file
 from waitress import serve
 
 from movies_catalog import (
@@ -24,6 +24,7 @@ from movies_catalog import (
     SOURCE_EXTENSIONS,
     load_html_template,
 )
+from movies_resources import load_asset_bytes
 from movies_server_core import (
     AUTH_STATE_PATH,
     DEFAULT_PORT,
@@ -69,7 +70,7 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 app.wsgi_app = StripPrefixMiddleware(app.wsgi_app)
 
 catalog = None
-plex_adapter: PlexAdapter | None = None
+plex_adapter: Optional[PlexAdapter] = None
 APP_INSTANCE = None
 ON_DEMAND_TRANSCODE = False
 HWACCEL_CODEC = "h264_videotoolbox"
@@ -153,7 +154,7 @@ def require_media_access(video_id: str) -> tuple[bool, tuple]:
     )
 
 
-def ensure_media_path_ready(media_path: Path | None) -> tuple[Path | None, tuple[str, int] | None]:
+def ensure_media_path_ready(media_path: Optional[Path]) -> Tuple[Optional[Path], Optional[Tuple[str, int]]]:
     return media_ensure_media_path_ready(
         media_path,
         str(cfg_runtime.get("mount_script", "") or "").strip(),
@@ -161,7 +162,7 @@ def ensure_media_path_ready(media_path: Path | None) -> tuple[Path | None, tuple
     )
 
 
-def ensure_media_id_ready(video_id: str) -> tuple[Path | None, tuple[str, int] | None]:
+def ensure_media_id_ready(video_id: str) -> Tuple[Optional[Path], Optional[Tuple[str, int]]]:
     return media_ensure_media_id_ready(
         catalog.video_map,
         video_id,
@@ -194,8 +195,8 @@ def index():
 @app.route("/movies.css")
 @app.route("/movies_server.css")
 def static_movies_css():
-    return send_file(
-        Path(__file__).with_name("movies.css"),
+    return Response(
+        load_asset_bytes("movies.css"),
         mimetype="text/css; charset=utf-8",
     )
 
@@ -203,8 +204,8 @@ def static_movies_css():
 @app.route("/movies.js")
 @app.route("/movies_server.js")
 def static_movies_js():
-    return send_file(
-        Path(__file__).with_name("movies.js"),
+    return Response(
+        load_asset_bytes("movies.js"),
         mimetype="application/javascript; charset=utf-8",
     )
 
@@ -212,8 +213,8 @@ def static_movies_js():
 @app.route("/movies.min.js")
 @app.route("/movies_server.min.js")
 def static_movies_min_js():
-    return send_file(
-        Path(__file__).with_name("movies.min.js"),
+    return Response(
+        load_asset_bytes("movies.min.js"),
         mimetype="application/javascript; charset=utf-8",
     )
 
@@ -221,16 +222,20 @@ def static_movies_min_js():
 @app.route("/locales/<path:fname>")
 def static_locale_js(fname):
     safe_name = Path(fname).name
-    return send_file(
-        Path(__file__).with_name("locales") / safe_name,
+    try:
+        payload = load_asset_bytes(safe_name, subdir="locales")
+    except FileNotFoundError:
+        abort(404)
+    return Response(
+        payload,
         mimetype="application/javascript; charset=utf-8",
     )
 
 
 @app.route("/plex.svg")
 def static_plex_logo():
-    return send_file(
-        Path(__file__).with_name("plex.svg"),
+    return Response(
+        load_asset_bytes("plex.svg"),
         mimetype="image/svg+xml",
     )
 
@@ -1219,9 +1224,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, type=Path)
     args = parser.parse_args()
-    setup_logging(flush_interval_seconds=60)
     cfg = load_config(args.config)
     cfg["_config_path"] = str(args.config)
+    setup_logging(cfg.get("log_dir", "./logs"), flush_interval_seconds=60)
     App(cfg).run()
 
 

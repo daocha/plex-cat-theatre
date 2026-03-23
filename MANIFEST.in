@@ -1,0 +1,5 @@
+include LICENSE
+include README.md
+include README.*.md
+include requirements.txt
+recursive-include cat_theatre_assets *.html *.css *.js *.svg *.json

@@ -16,12 +16,12 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 import struct
 
 
 class PlexAdapter:
-    def __init__(self, enabled: bool, plex_cfg: dict | None = None):
+    def __init__(self, enabled: bool, plex_cfg: Optional[dict] = None):
         self.enabled = bool(enabled)
         cfg = plex_cfg or {}
         self.base_url = str(cfg.get("base_url", "http://127.0.0.1:32400")).rstrip("/")
@@ -242,17 +242,17 @@ class PlexAdapter:
 
         return item
 
-    def _build_url(self, path: str, query: dict | None = None) -> str:
+    def _build_url(self, path: str, query: Optional[dict] = None) -> str:
         q = dict(query or {})
         if self.token:
             q["X-Plex-Token"] = self.token
         return f"{self.base_url}{path}" + ("?" + urllib.parse.urlencode(q) if q else "")
 
-    def _open(self, path: str, query: dict | None = None, headers: dict | None = None):
+    def _open(self, path: str, query: Optional[dict] = None, headers: Optional[dict] = None):
         req = urllib.request.Request(self._build_url(path, query), headers=headers or {})
         return urllib.request.urlopen(req, timeout=self.timeout)
 
-    def _get_xml(self, path: str, query: dict | None = None) -> ET.Element:
+    def _get_xml(self, path: str, query: Optional[dict] = None) -> ET.Element:
         with self._open(path, query, headers={"Accept": "application/xml"}) as resp:
             body = resp.read()
         return ET.fromstring(body)
@@ -280,13 +280,13 @@ class PlexAdapter:
                 return p
         return None
 
-    def resolve_part_url(self, video_id: str) -> str | None:
+    def resolve_part_url(self, video_id: str) -> Optional[str]:
         p = self._resolve_item(video_id)
         if not p or not p.get("part_key"):
             return None
         return self._build_url(p["part_key"])
 
-    def build_transcode_playlist_url(self, video_id: str, session_id: str | None = None) -> str | None:
+    def build_transcode_playlist_url(self, video_id: str, session_id: Optional[str] = None) -> Optional[str]:
         p = self._resolve_item(video_id)
         rating_key = str((p or {}).get("rating_key", "")).strip()
         if not rating_key:
@@ -313,11 +313,11 @@ class PlexAdapter:
         }
         return self._build_url("/video/:/transcode/universal/start.m3u8", params)
 
-    def open_absolute(self, absolute_url: str, headers: dict | None = None):
+    def open_absolute(self, absolute_url: str, headers: Optional[dict] = None):
         req = urllib.request.Request(absolute_url, headers=headers or {})
         return urllib.request.urlopen(req, timeout=self.timeout)
 
-    def proxy_video(self, video_id: str, range_header: str | None = None):
+    def proxy_video(self, video_id: str, range_header: Optional[str] = None):
         p = self._resolve_item(video_id)
         if not p or not p.get("part_key"):
             return None, "not_found"
@@ -332,7 +332,7 @@ class PlexAdapter:
         except Exception as e:
             return None, str(e)
 
-    def _sniff_image_size(self, head: bytes) -> tuple[int, int] | None:
+    def _sniff_image_size(self, head: bytes) -> Optional[Tuple[int, int]]:
         try:
             if head.startswith(b"\x89PNG\r\n\x1a\n") and len(head) >= 24:
                 w, h = struct.unpack(">II", head[16:24])
