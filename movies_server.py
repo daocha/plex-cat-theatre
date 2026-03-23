@@ -15,7 +15,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Dict
 
-from flask import Flask, Response, jsonify, redirect, request, send_file
+from flask import Flask, Response, abort, jsonify, redirect, request, send_file
 from waitress import serve
 
 from movies_catalog import (
@@ -24,6 +24,7 @@ from movies_catalog import (
     SOURCE_EXTENSIONS,
     load_html_template,
 )
+from movies_resources import load_asset_bytes
 from movies_server_core import (
     AUTH_STATE_PATH,
     DEFAULT_PORT,
@@ -194,8 +195,8 @@ def index():
 @app.route("/movies.css")
 @app.route("/movies_server.css")
 def static_movies_css():
-    return send_file(
-        Path(__file__).with_name("movies.css"),
+    return Response(
+        load_asset_bytes("movies.css"),
         mimetype="text/css; charset=utf-8",
     )
 
@@ -203,8 +204,8 @@ def static_movies_css():
 @app.route("/movies.js")
 @app.route("/movies_server.js")
 def static_movies_js():
-    return send_file(
-        Path(__file__).with_name("movies.js"),
+    return Response(
+        load_asset_bytes("movies.js"),
         mimetype="application/javascript; charset=utf-8",
     )
 
@@ -212,8 +213,8 @@ def static_movies_js():
 @app.route("/movies.min.js")
 @app.route("/movies_server.min.js")
 def static_movies_min_js():
-    return send_file(
-        Path(__file__).with_name("movies.min.js"),
+    return Response(
+        load_asset_bytes("movies.min.js"),
         mimetype="application/javascript; charset=utf-8",
     )
 
@@ -221,16 +222,20 @@ def static_movies_min_js():
 @app.route("/locales/<path:fname>")
 def static_locale_js(fname):
     safe_name = Path(fname).name
-    return send_file(
-        Path(__file__).with_name("locales") / safe_name,
+    try:
+        payload = load_asset_bytes(safe_name, subdir="locales")
+    except FileNotFoundError:
+        abort(404)
+    return Response(
+        payload,
         mimetype="application/javascript; charset=utf-8",
     )
 
 
 @app.route("/plex.svg")
 def static_plex_logo():
-    return send_file(
-        Path(__file__).with_name("plex.svg"),
+    return Response(
+        load_asset_bytes("plex.svg"),
         mimetype="image/svg+xml",
     )
 

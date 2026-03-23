@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 from typing import List
 
+from movies_resources import load_asset_text
+
 
 def vid_id(path: Path) -> str:
     return hashlib.sha1(str(path.resolve()).encode("utf-8")).hexdigest()[:16]
@@ -371,11 +373,10 @@ def extract_subtitle(
 
 
 def load_html_template() -> str:
-    html_path = Path(__file__).with_name("index.html")
     try:
-        return html_path.read_text(encoding="utf-8")
+        return load_asset_text("index.html")
     except Exception as exc:
-        logging.error("Failed to load template %s: %s", html_path, exc)
+        logging.error("Failed to load template index.html: %s", exc)
         return (
             "<!doctype html><html><body><h1>Cat Theatre</h1>"
             "<p>Template load failed.</p></body></html>"
