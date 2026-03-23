@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 from flask import jsonify, request
 
@@ -27,7 +28,7 @@ SUPPORTED_LOCALES = {
 
 
 class ServerLocalizer:
-    def __init__(self, locale_dir: Path | None = None):
+    def __init__(self, locale_dir: Optional[Path] = None):
         self.locale_dir = locale_dir
         self._cache: dict[str, dict[str, str]] = {}
 

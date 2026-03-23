@@ -8,6 +8,7 @@
     "Private"
   ],
   "thumbs_dir": "./cache/thumbnails",
+  "log_dir": "./logs",
   "port": 9245,
   "host": "0.0.0.0",
   "mount_script": "",

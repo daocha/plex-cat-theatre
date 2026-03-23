@@ -8,7 +8,7 @@ import json
 import logging
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from movies_resources import load_asset_text
 
@@ -29,7 +29,7 @@ def fmt_size(size: int) -> str:
 
 def probe_aspect(
     video_path: Path,
-    ffprobe_bin: str | None,
+    ffprobe_bin: Optional[str],
     aspect_cache: dict[str, float],
     timeout: int,
 ):
@@ -73,7 +73,7 @@ def probe_aspect(
 
 def probe_audio_codecs(
     video_path: Path,
-    ffprobe_bin: str | None,
+    ffprobe_bin: Optional[str],
     audio_codec_cache: dict[str, List[str]],
     timeout: int,
 ) -> List[str]:
@@ -111,7 +111,7 @@ def probe_audio_codecs(
         return []
 
 
-def probe_duration(video_path: Path, ffprobe_bin: str | None, timeout: int):
+def probe_duration(video_path: Path, ffprobe_bin: Optional[str], timeout: int):
     if not ffprobe_bin:
         return None
     try:
@@ -138,7 +138,7 @@ def probe_duration(video_path: Path, ffprobe_bin: str | None, timeout: int):
         return None
 
 
-def pick_best_subtitle_file(files: List[Path]) -> Path | None:
+def pick_best_subtitle_file(files: List[Path]) -> Optional[Path]:
     if not files:
         return None
 
@@ -177,11 +177,11 @@ def srt_to_vtt(srt_path: Path, vtt_path: Path):
 def extract_chi_from_mkv_to_vtt(
     mkv_path: Path,
     target_vtt: Path,
-    ffprobe_bin: str | None,
-    ffmpeg_bin: str | None,
+    ffprobe_bin: Optional[str],
+    ffmpeg_bin: Optional[str],
     ffprobe_timeout: int,
     ffmpeg_timeout: int,
-) -> Path | None:
+) -> Optional[Path]:
     if not ffprobe_bin or not ffmpeg_bin or not mkv_path.exists():
         return None
     try:
@@ -241,8 +241,8 @@ def extract_chi_from_mkv_to_vtt(
 
 def resolve_sidecar_subtitle(
     video_path: Path,
-    ffprobe_bin: str | None,
-    ffmpeg_bin: str | None,
+    ffprobe_bin: Optional[str],
+    ffmpeg_bin: Optional[str],
     ffprobe_timeout: int,
     ffmpeg_timeout: int,
 ):
@@ -312,8 +312,8 @@ def resolve_sidecar_subtitle(
 def extract_subtitle(
     src_path: Path,
     out_mp4: Path,
-    ffprobe_bin: str | None,
-    ffmpeg_bin: str | None,
+    ffprobe_bin: Optional[str],
+    ffmpeg_bin: Optional[str],
     target_lang: str = "chi",
     target_title: str = "Traditional",
 ):

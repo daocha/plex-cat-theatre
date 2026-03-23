@@ -13,7 +13,7 @@ import threading
 import urllib.error
 import urllib.parse
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 from flask import Flask, Response, abort, jsonify, redirect, request, send_file
 from waitress import serve
@@ -70,7 +70,7 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 app.wsgi_app = StripPrefixMiddleware(app.wsgi_app)
 
 catalog = None
-plex_adapter: PlexAdapter | None = None
+plex_adapter: Optional[PlexAdapter] = None
 APP_INSTANCE = None
 ON_DEMAND_TRANSCODE = False
 HWACCEL_CODEC = "h264_videotoolbox"
@@ -154,7 +154,7 @@ def require_media_access(video_id: str) -> tuple[bool, tuple]:
     )
 
 
-def ensure_media_path_ready(media_path: Path | None) -> tuple[Path | None, tuple[str, int] | None]:
+def ensure_media_path_ready(media_path: Optional[Path]) -> Tuple[Optional[Path], Optional[Tuple[str, int]]]:
     return media_ensure_media_path_ready(
         media_path,
         str(cfg_runtime.get("mount_script", "") or "").strip(),
@@ -162,7 +162,7 @@ def ensure_media_path_ready(media_path: Path | None) -> tuple[Path | None, tuple
     )
 
 
-def ensure_media_id_ready(video_id: str) -> tuple[Path | None, tuple[str, int] | None]:
+def ensure_media_id_ready(video_id: str) -> Tuple[Optional[Path], Optional[Tuple[str, int]]]:
     return media_ensure_media_id_ready(
         catalog.video_map,
         video_id,
@@ -1224,9 +1224,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, type=Path)
     args = parser.parse_args()
-    setup_logging(flush_interval_seconds=60)
     cfg = load_config(args.config)
     cfg["_config_path"] = str(args.config)
+    setup_logging(cfg.get("log_dir", "./logs"), flush_interval_seconds=60)
     App(cfg).run()
 
 

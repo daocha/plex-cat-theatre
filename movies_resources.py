@@ -5,18 +5,19 @@ from __future__ import annotations
 
 from importlib import resources
 from pathlib import Path
+from typing import Optional
 
 ASSET_PACKAGE = "cat_theatre_assets"
 ROOT = Path(__file__).resolve().parent
 
 
-def _local_asset_path(name: str, subdir: str | None = None) -> Path:
+def _local_asset_path(name: str, subdir: Optional[str] = None) -> Path:
     if subdir:
         return ROOT / subdir / name
     return ROOT / name
 
 
-def load_asset_bytes(name: str, subdir: str | None = None) -> bytes:
+def load_asset_bytes(name: str, subdir: Optional[str] = None) -> bytes:
     local_path = _local_asset_path(name, subdir)
     if local_path.exists():
         return local_path.read_bytes()
@@ -26,7 +27,7 @@ def load_asset_bytes(name: str, subdir: str | None = None) -> bytes:
     return target.joinpath(name).read_bytes()
 
 
-def load_asset_text(name: str, subdir: str | None = None, encoding: str = "utf-8") -> str:
+def load_asset_text(name: str, subdir: Optional[str] = None, encoding: str = "utf-8") -> str:
     local_path = _local_asset_path(name, subdir)
     if local_path.exists():
         return local_path.read_text(encoding=encoding)

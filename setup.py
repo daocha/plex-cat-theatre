@@ -34,7 +34,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Dao Cha",
     license="MIT",
-    python_requires=">=3.10",
+    python_requires=">=3.9",
     install_requires=[
         "Flask>=3.0,<4.0",
         "waitress>=3.0,<4.0",
@@ -69,6 +69,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Topic :: Multimedia :: Video",
