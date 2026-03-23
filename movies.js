@@ -106,7 +106,8 @@ const EN_I18N = {
     play: "Play",
     playbackFailed: "Playback failed",
     playbackFileNotFound: "File not found. The drive may be unmounted or sleeping. Please retry.",
-    playbackUnsupportedDirect: "Direct playback is not supported for this file on this device. Switched back to automatic playback.",
+    playbackUnsupportedDirect: "Direct playback is not supported for this file on this device.",
+    playbackUnsupportedDirectPlex: "Direct playback is not supported for this file on this device. Switched to Plex playback.",
     defaultLabel: "default",
     playbackLabel: "playback",
     whitelistLabel: "whitelist",
@@ -2865,21 +2866,19 @@ async function handleUnsupportedDirectPlayback() {
   const failedRecord =
     currentVideoRecord ||
     (failedVideoId ? videos.find((v) => v.id === failedVideoId) : null);
-  if (manualPlaybackMode === "direct" && failedVideoId) {
-    manualPlaybackMode = null;
+  if (failedRecord && failedVideoId && getKnownPlexStreamUrl(failedRecord)) {
+    manualPlaybackMode = "plex";
     try {
-      await persistManualPlaybackOverride(failedVideoId, null);
+      await persistManualPlaybackOverride(failedVideoId, "plex");
     } catch (err) {}
-    if (failedRecord && getKnownPlexStreamUrl(failedRecord)) {
-      const subtitle = failedRecord.subtitle_url
-        ? withBase(failedRecord.subtitle_url)
-        : null;
-      currentVideoRecord = failedRecord;
-      updateDebugMediaState(failedRecord);
-      showToast(tr("playbackUnsupportedDirect"));
-      openPlayer(pickStreamCandidates(failedRecord), failedRecord.name, subtitle);
-      return;
-    }
+    const subtitle = failedRecord.subtitle_url
+      ? withBase(failedRecord.subtitle_url)
+      : null;
+    currentVideoRecord = failedRecord;
+    updateDebugMediaState(failedRecord);
+    showToast(tr("playbackUnsupportedDirectPlex"));
+    openPlayer(pickStreamCandidates(failedRecord), failedRecord.name, subtitle);
+    return;
   }
   if (failedRecord?.soft_stream_url) {
     const subtitle = failedRecord.subtitle_url
