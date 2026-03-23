@@ -85,6 +85,14 @@ which ffprobe
 
 ## 快速開始
 
+如果你安裝的是已發佈到 PyPI 的套件，請使用：
+
+```bash
+pip install plex-cat-theatre
+plex-cat-theatre-init
+plex-cat-theatre --config ~/movies_config.json
+```
+
 首選啟動方式：
 
 ```bash

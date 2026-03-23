@@ -85,6 +85,14 @@ which ffprobe
 
 ## Schnellstart
 
+Wenn du das veröffentlichte PyPI-Paket installierst, verwende:
+
+```bash
+pip install plex-cat-theatre
+plex-cat-theatre-init
+plex-cat-theatre --config ~/movies_config.json
+```
+
 Bevorzugte Startmethode:
 
 ```bash
