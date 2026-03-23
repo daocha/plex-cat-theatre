@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 from flask import jsonify, request
+
+from movies_resources import load_asset_text
 
 DEFAULT_LOCALE = "en"
 SUPPORTED_LOCALES = {
@@ -25,8 +28,8 @@ SUPPORTED_LOCALES = {
 
 
 class ServerLocalizer:
-    def __init__(self, locale_dir: Path | None = None):
-        self.locale_dir = locale_dir or Path(__file__).with_name("server_locales")
+    def __init__(self, locale_dir: Optional[Path] = None):
+        self.locale_dir = locale_dir
         self._cache: dict[str, dict[str, str]] = {}
 
     def normalize_locale_code(self, value: str) -> str:
@@ -80,9 +83,11 @@ class ServerLocalizer:
         cached = self._cache.get(normalized)
         if cached is not None:
             return cached
-        path = self.locale_dir / f"{normalized}.json"
         try:
-            bundle = json.loads(path.read_text(encoding="utf-8"))
+            if self.locale_dir is not None:
+                bundle = json.loads((self.locale_dir / f"{normalized}.json").read_text(encoding="utf-8"))
+            else:
+                bundle = json.loads(load_asset_text(f"{normalized}.json", subdir="server_locales"))
         except Exception:
             if normalized != DEFAULT_LOCALE:
                 bundle = self.load_bundle(DEFAULT_LOCALE)

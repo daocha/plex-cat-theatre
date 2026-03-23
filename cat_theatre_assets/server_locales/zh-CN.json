@@ -1,0 +1,15 @@
+{
+  "forbidden_private": "私密媒体已锁定。",
+  "missing_device_id": "缺少设备 ID。",
+  "too_many_attempts": "解锁尝试过多，请稍后再试。",
+  "invalid_passcode": "密码错误。",
+  "scan_in_progress": "扫描已在进行中。",
+  "subtitle_not_found": "找不到字幕",
+  "media_folder_not_mounted": "媒体文件夹未挂载",
+  "file_not_found": "找不到文件",
+  "hls_not_enabled": "此文件未启用 HLS",
+  "ffmpeg_not_found": "未找到 ffmpeg",
+  "not_found": "未找到",
+  "bad_request": "请求无效",
+  "forbidden": "禁止访问"
+}

@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import urllib.parse
 from pathlib import Path
+from typing import Optional, Tuple
 
 
 def build_plex_hls_proxy_url(
@@ -78,10 +79,10 @@ def run_mount_script(command_text: str) -> bool:
 
 
 def ensure_media_path_ready(
-    media_path: Path | None,
+    media_path: Optional[Path],
     mount_script: str,
     localized_message_fn,
-) -> tuple[Path | None, tuple[str, int] | None]:
+) -> Tuple[Optional[Path], Optional[Tuple[str, int]]]:
     if media_path and media_path.exists():
         return media_path, None
     folder = media_path.parent if media_path else None
@@ -102,7 +103,7 @@ def ensure_media_id_ready(
     video_id: str,
     mount_script: str,
     localized_message_fn,
-) -> tuple[Path | None, tuple[str, int] | None]:
+) -> Tuple[Optional[Path], Optional[Tuple[str, int]]]:
     return ensure_media_path_ready(
         video_map.get(urllib.parse.unquote(video_id)),
         mount_script,

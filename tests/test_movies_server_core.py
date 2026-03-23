@@ -30,6 +30,7 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(cfg["private_folder"], ["Private"])
         self.assertEqual(cfg["direct_playback"]["audio_whitelist"], ["aac", "mp3"])
         self.assertEqual(cfg["thumbs_dir"], str(path.parent / "cache" / "thumbnails"))
+        self.assertEqual(cfg["log_dir"], str(path.parent / "logs"))
 
     def test_load_config_rejects_invalid_port(self):
         path = self.write_config(

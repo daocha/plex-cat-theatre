@@ -8,7 +8,7 @@ import shutil
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from movies_catalog_index import load_catalog_index, save_catalog_index
 from movies_catalog_scan import run_catalog_scan
@@ -59,7 +59,7 @@ class Catalog:
         self,
         roots: List[Path],
         thumbs_dir: Path,
-        private_folders: List[str] | None = None,
+        private_folders: Optional[List[str]] = None,
         private_passcode: str = "",
         transcode_enabled: bool = True,
         verify_passcode_fn=None,
@@ -530,9 +530,9 @@ class Catalog:
         self,
         video_id: str,
         *,
-        aspect: float | None = None,
-        subtitle_path: Path | None = None,
-        audio_codecs: List[str] | None = None,
+        aspect: Optional[float] = None,
+        subtitle_path: Optional[Path] = None,
+        audio_codecs: Optional[List[str]] = None,
     ):
         with self._lock:
             video_path = self.video_map.get(video_id)
@@ -634,13 +634,13 @@ class Catalog:
     def _probe_duration(self, video_path: Path):
         return probe_duration(video_path, FFPROBE, FFPROBE_TIMEOUT)
 
-    def _pick_best_subtitle_file(self, files: List[Path]) -> Path | None:
+    def _pick_best_subtitle_file(self, files: List[Path]) -> Optional[Path]:
         return pick_best_subtitle_file(files)
 
     def _srt_to_vtt(self, srt_path: Path, vtt_path: Path):
         srt_to_vtt(srt_path, vtt_path)
 
-    def _extract_chi_from_mkv_to_vtt(self, mkv_path: Path, target_vtt: Path) -> Path | None:
+    def _extract_chi_from_mkv_to_vtt(self, mkv_path: Path, target_vtt: Path) -> Optional[Path]:
         return extract_chi_from_mkv_to_vtt(
             mkv_path,
             target_vtt,
