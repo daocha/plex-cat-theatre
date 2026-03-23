@@ -21,6 +21,15 @@ AUTH_STATE_PATH = Path(__file__).with_name("movies_auth_state.json")
 TRUE_VALUES = {"1", "true", "yes", "on"}
 UNLOCK_MAX_ATTEMPTS = 5
 UNLOCK_COOLDOWN_SECONDS = 3600
+SUPPORTED_LOCALES = {"auto", "en", "zh-CN", "zh-HK", "zh-TW", "fr", "ko", "ja", "de", "th", "vi", "nl"}
+LOCALE_ALIASES = {
+    "zh": "zh-CN",
+    "zh-hans": "zh-CN",
+    "zh-sg": "zh-CN",
+    "zh-my": "zh-CN",
+    "zh-hant": "zh-TW",
+    "zh-mo": "zh-HK",
+}
 
 
 def hash_passcode_sha256(passcode: str) -> str:
@@ -297,6 +306,139 @@ def apply_public_image_cache(resp, max_age: int = 30 * 24 * 60 * 60):
     return resp
 
 
+def _ensure_bool_field(cfg: dict, key: str):
+    if not isinstance(cfg.get(key), bool):
+        raise ValueError(f"Config field '{key}' must be true or false")
+
+
+def _ensure_string_field(cfg: dict, key: str):
+    value = cfg.get(key)
+    if not isinstance(value, str):
+        raise ValueError(f"Config field '{key}' must be a string")
+    cfg[key] = value.strip()
+
+
+def _normalize_string_list(value, field_name: str) -> list[str]:
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, list):
+        items = value
+    else:
+        raise ValueError(f"Config field '{field_name}' must be a string or a list of strings")
+    normalized: list[str] = []
+    for item in items:
+        if not isinstance(item, str):
+            raise ValueError(f"Config field '{field_name}' must contain only strings")
+        text = item.strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def normalize_locale_code(locale: str) -> str:
+    raw = str(locale or "").strip()
+    if not raw:
+        return ""
+    canonical = raw.replace("_", "-")
+    if canonical in SUPPORTED_LOCALES:
+        return canonical
+    lower = canonical.lower()
+    if lower in LOCALE_ALIASES:
+        return LOCALE_ALIASES[lower]
+    parts = canonical.split("-")
+    if parts and parts[0].lower() == "zh":
+        script = (parts[1] if len(parts) > 1 else "").lower()
+        region = (parts[1] if len(parts) > 1 else (parts[2] if len(parts) > 2 else "")).lower()
+        if script == "hant" or region in {"tw", "hk", "mo"}:
+            return "zh-HK" if region in {"hk", "mo"} else "zh-TW"
+        return "zh-CN"
+    base = parts[0].lower() if parts else ""
+    for code in SUPPORTED_LOCALES:
+        if code.lower() == base:
+            return code
+    return ""
+
+
+def validate_and_normalize_config(cfg: dict, path: Path) -> Dict:
+    if not isinstance(cfg, dict):
+        raise ValueError("Config root must be a JSON object")
+
+    if "root" not in cfg:
+        raise ValueError("Missing root in config")
+
+    cfg["root"] = _normalize_string_list(cfg.get("root"), "root")
+    cfg["private_folder"] = _normalize_string_list(cfg.get("private_folder", []), "private_folder")
+
+    try:
+        cfg["port"] = int(cfg.get("port", DEFAULT_PORT))
+    except Exception as exc:
+        raise ValueError("Config field 'port' must be an integer") from exc
+    if not (1 <= cfg["port"] <= 65535):
+        raise ValueError("Config field 'port' must be between 1 and 65535")
+
+    _ensure_string_field(cfg, "host")
+    _ensure_string_field(cfg, "private_passcode")
+    _ensure_string_field(cfg, "mount_script")
+    _ensure_string_field(cfg, "transcode_video_codec")
+
+    locale = normalize_locale_code(str(cfg.get("locale", "auto") or "auto").strip())
+    if locale not in SUPPORTED_LOCALES:
+        raise ValueError(
+            "Config field 'locale' must be one of: "
+            + ", ".join(sorted(SUPPORTED_LOCALES))
+        )
+    cfg["locale"] = locale
+
+    for key in (
+        "transcode",
+        "on_demand_transcode",
+        "on_demand_hls",
+        "enable_plex_server",
+        "auto_scan_on_start",
+        "debug_enabled",
+    ):
+        _ensure_bool_field(cfg, key)
+
+    direct_playback = cfg.get("direct_playback")
+    if not isinstance(direct_playback, dict):
+        raise ValueError("Config field 'direct_playback' must be an object")
+    if not isinstance(direct_playback.get("enabled"), bool):
+        raise ValueError("Config field 'direct_playback.enabled' must be true or false")
+    direct_playback["audio_whitelist"] = _normalize_string_list(
+        direct_playback.get("audio_whitelist", []),
+        "direct_playback.audio_whitelist",
+    )
+    cfg["direct_playback"] = direct_playback
+
+    plex = cfg.get("plex")
+    if not isinstance(plex, dict):
+        raise ValueError("Config field 'plex' must be an object")
+    if not isinstance(plex.get("prefer_transcode"), bool):
+        raise ValueError("Config field 'plex.prefer_transcode' must be true or false")
+    _ensure_string_field(plex, "base_url")
+    _ensure_string_field(plex, "token")
+    try:
+        plex["timeout_seconds"] = int(plex.get("timeout_seconds", 8))
+        plex["refresh_interval_seconds"] = int(plex.get("refresh_interval_seconds", 120))
+    except Exception as exc:
+        raise ValueError("Plex timeout and refresh interval must be integers") from exc
+    if plex["timeout_seconds"] <= 0:
+        raise ValueError("Config field 'plex.timeout_seconds' must be greater than 0")
+    if plex["refresh_interval_seconds"] <= 0:
+        raise ValueError("Config field 'plex.refresh_interval_seconds' must be greater than 0")
+    cfg["plex"] = plex
+
+    thumbs_dir = cfg.get("thumbs_dir")
+    if thumbs_dir is None:
+        cfg["thumbs_dir"] = str(path.parent / "cache" / "thumbnails")
+    elif not isinstance(thumbs_dir, str):
+        raise ValueError("Config field 'thumbs_dir' must be a string")
+    else:
+        cfg["thumbs_dir"] = thumbs_dir.strip() or str(path.parent / "cache" / "thumbnails")
+
+    return cfg
+
+
 def load_config(path: Path) -> Dict:
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
@@ -332,15 +474,7 @@ def load_config(path: Path) -> Dict:
             "prefer_transcode": False,
         },
     )
-    if "root" not in cfg:
-        raise ValueError("Missing root in config")
-    if not isinstance(cfg["root"], list):
-        cfg["root"] = [cfg["root"]]
-    if not isinstance(cfg["private_folder"], list):
-        cfg["private_folder"] = [cfg["private_folder"]]
-    if "thumbs_dir" not in cfg:
-        cfg["thumbs_dir"] = str(path.parent / "cache" / "thumbnails")
-    return cfg
+    return validate_and_normalize_config(cfg, path)
 
 
 def setup_logging(flush_interval_seconds: int = 60):

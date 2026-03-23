@@ -292,7 +292,7 @@ class PlexAdapter:
         if not rating_key:
             return None
 
-        session = session_id or f"cat_theetre-{uuid.uuid4().hex[:12]}"
+        session = session_id or f"cat_theatre-{uuid.uuid4().hex[:12]}"
         params = {
             "path": self._build_url(f"/library/metadata/{rating_key}"),
             "mediaIndex": "0",
