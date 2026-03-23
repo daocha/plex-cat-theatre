@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=yes,viewport-fit=cover"
+    />
+    <title>Cat Theatre</title>
+    <link rel="stylesheet" href="movies.css?v=20260318-1202" />
+  </head>
+  <body>
+    <main>
+      <div class="header-row">
+        <h1>
+          <span class="brand-icons">
+            <span class="brand-logo" aria-hidden="true"></span>
+            <a
+              id="plexHomeLink"
+              class="plex-home"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="display: none"
+              aria-label="Open Plex"
+            >
+              <img src="plex.svg" alt="" aria-hidden="true" />
+            </a>
+          </span>
+          <span id="brandTitle">Cat Theatre</span>
+        </h1>
+        <div class="top">
+          <div id="localePicker" class="locale-picker">
+            <button id="localeBtn" type="button" class="locale-btn">English</button>
+            <div id="localePanel" class="locale-panel" style="display: none">
+              <div id="localeOptions" class="locale-options"></div>
+            </div>
+            <select id="localeSel" style="display: none">
+              <option value="auto">Auto</option>
+              <option value="en">English</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="zh-HK">繁體中文（香港）</option>
+              <option value="zh-TW">繁體中文（台灣）</option>
+              <option value="fr">Français</option>
+              <option value="ko">한국어</option>
+              <option value="ja">日本語</option>
+              <option value="de">Deutsch</option>
+              <option value="th">ไทย</option>
+              <option value="vi">Tiếng Việt</option>
+              <option value="nl">Nederlands</option>
+            </select>
+          </div>
+          <input id="q" placeholder="Search videos..." />
+          <div id="folder" class="folder-picker">
+            <button id="folderBtn" type="button" class="folder-btn">
+              All folders
+            </button>
+            <div id="folderPanel" class="folder-panel" style="display: none">
+              <input
+                id="folderSearch"
+                type="text"
+                placeholder="Search folder..."
+              />
+              <div id="folderOptions" class="folder-options"></div>
+            </div>
+            <select id="folderSelect" style="display: none">
+              <option value="">All folders</option>
+            </select>
+          </div>
+          <div id="themePicker" class="theme-picker">
+            <button id="themeBtn" type="button" class="theme-btn">
+              Neo Dark
+            </button>
+            <div id="themePanel" class="theme-panel" style="display: none">
+              <div id="themeOptions" class="theme-options"></div>
+              <div
+                id="transitionBlock"
+                class="theme-transition"
+                style="display: none"
+              >
+                <div id="transitionLabel" class="theme-transition-label">
+                  Android transition
+                </div>
+                <div class="theme-transition-row">
+                  <button
+                    id="transitionSnapshot"
+                    type="button"
+                    class="theme-toggle"
+                    data-mode="snapshot"
+                  >
+                    Snapshot
+                  </button>
+                  <button
+                    id="transitionHead"
+                    type="button"
+                    class="theme-toggle"
+                    data-mode="head"
+                  >
+                    Classic
+                  </button>
+                </div>
+              </div>
+            </div>
+            <select id="themeSel" style="display: none">
+              <option value="neo-dark">Neo Dark</option>
+              <option value="graphite">Graphite Gray</option>
+              <option value="ivory-noir">Ivory Noir</option>
+              <option value="electric-cyan">Electric Cyan</option>
+              <option value="sunset-amber">Sunset Amber</option>
+            </select>
+            <select id="transitionSel" style="display: none">
+              <option value="snapshot">Transition: Snapshot</option>
+              <option value="head">Transition: Classic</option>
+            </select>
+          </div>
+          <button
+            id="rescan"
+            type="button"
+            title="Open scan actions: Rescan, Full Scan, or Refresh Database"
+          >
+            Rescan
+          </button>
+          <button
+            id="privateToggle"
+            aria-label="Private mode"
+            title="Private mode"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M17 9h-1V7a4 4 0 10-8 0v2H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2zm-7-2a2 2 0 114 0v2h-4V7zm2 9a2 2 0 012 2 2 2 0 01-1 1.73V22h-2v-1.27A2 2 0 0110 18a2 2 0 012-2z"
+              />
+            </svg>
+          </button>
+          <span id="stat" style="opacity: 0.7"></span>
+        </div>
+      </div>
+      <div
+        id="notice"
+        style="
+          display: none;
+          margin: 0 0 14px;
+          padding: 12px 14px;
+          border: 1px solid #3a2f13;
+          border-radius: 12px;
+          background: #211a0d;
+          color: #f5d98b;
+        "
+      ></div>
+      <div id="grid" class="grid"></div>
+      <div id="scrollSentinel" style="height: 1px; width: 100%"></div>
+    </main>
+    <div id="debugPanel" class="debug-panel">
+      <div id="debugHeader" class="debug-header">Debug</div>
+      <pre id="debugOutput">Waiting for config...</pre>
+    </div>
+    <button
+      id="debugCorner"
+      class="debug-corner"
+      type="button"
+      aria-label="Show debug panel"
+      aria-hidden="true"
+    ></button>
+    <button id="toTopBtn" type="button" aria-label="Back to top" title="Top">
+      Top
+    </button>
+    <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
+    <div id="tt"></div>
+    <div id="preloadOverlay" class="preload-overlay" aria-hidden="true">
+      <div class="vloader on">
+        <div class="cat">🐈‍⬛</div>
+        <div id="preloadText" class="txt">
+          Cat is loading<span class="dots"></span>
+        </div>
+      </div>
+    </div>
+    <div id="modal" class="modal" aria-hidden="true">
+      <div class="box">
+        <div class="bar">
+          <div id="mtitle" class="title">播放</div>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <button id="mss" type="button">Slideshow: Off</button>
+            <button id="msub" type="button" style="display: none">
+              CC: On
+            </button>
+            <button
+              id="mplex"
+              class="plex-btn"
+              type="button"
+              aria-pressed="false"
+              title="Toggle Plex/direct playback"
+            >
+              <img
+                class="plex-icon"
+                src="plex.svg"
+                alt=""
+                role="presentation"
+                aria-hidden="true"
+              />
+              <span id="plexSrText" class="sr-only">Plex playback</span>
+            </button>
+            <button id="mclose" class="close" type="button">Close</button>
+          </div>
+        </div>
+        <div id="vloader" class="vloader">
+          <div class="cat">🐈‍⬛</div>
+          <div id="modalLoaderText" class="txt">
+            Cat is loading<span class="dots"></span>
+          </div>
+        </div>
+        <video id="mvideo" controls playsinline></video>
+      </div>
+    </div>
+    <div id="pmodal" class="pmodal" aria-hidden="true">
+      <div
+        id="privateDialog"
+        class="card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Private mode verification"
+      >
+        <div id="privateDialogTitle" style="font-weight: 700">
+          Enter private passcode
+        </div>
+        <div id="privateDialogHint" class="hint">Unlock private folders</div>
+        <input
+          id="ppass"
+          type="password"
+          placeholder="Passcode"
+          autocomplete="off"
+        />
+        <div class="row">
+          <button id="pcancel" class="btn-muted" type="button">Cancel</button>
+          <button id="pok" class="btn-primary" type="button">Unlock</button>
+        </div>
+      </div>
+    </div>
+    <div id="emodal" class="emodal" aria-hidden="true">
+      <div
+        id="errorDialog"
+        class="card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Error"
+      >
+        <div id="etitle" class="title">Authentication failed</div>
+        <div id="emsg" class="msg">Passcode 錯誤</div>
+        <div class="row" style="margin-top: 12px">
+          <button
+            id="eok"
+            type="button"
+            style="flex: 1; background: var(--danger-btn)"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="scanModal" class="scanmodal" aria-hidden="true">
+      <div
+        id="scanDialog"
+        class="card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Scan actions"
+      >
+        <div id="scanTitle" class="title">Scan Actions</div>
+        <div id="scanHint" class="hint">
+          Choose what to do with the movie catalog and browser snapshot cache.
+        </div>
+        <div class="scan-actions">
+          <div class="scan-action-item">
+            <button id="scanRescan" class="btn-primary" type="button">
+              Rescan
+            </button>
+            <div id="scanRescanDesc" class="desc">
+              Quick scan for new or changed files.
+            </div>
+          </div>
+          <div class="scan-action-item">
+            <button id="scanFull" class="btn-primary" type="button">
+              Full Scan
+            </button>
+            <div id="scanFullDesc" class="desc">
+              Rebuild scan metadata for the whole library.
+            </div>
+          </div>
+          <div class="scan-action-item">
+            <button id="scanRefreshDb" class="btn-muted" type="button">
+              Refresh Database
+            </button>
+            <div id="scanRefreshDbDesc" class="desc">
+              Clear browser cache and reload from server.
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <button id="scanCancel" class="btn-muted" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+    <script src="movies.js?v=20260321-0205"></script>
+  </body>
+</html>

@@ -11,7 +11,7 @@ import threading
 import time
 import urllib.parse
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from flask import request
 
@@ -99,7 +99,7 @@ def parse_bool(value, default: str = "0") -> bool:
     return str(raw).strip().lower() in TRUE_VALUES
 
 
-def extract_device_id(data: dict | None = None) -> str:
+def extract_device_id(data: Optional[dict] = None) -> str:
     payload = data or {}
     return str(
         request.headers.get("X-Device-Id", "")
@@ -156,7 +156,7 @@ class StripPrefixMiddleware:
         return self.wsgi_app(environ, start_response)
 
 
-def client_identity(data: dict | None = None) -> str:
+def client_identity(data: Optional[dict] = None) -> str:
     device_id = extract_device_id(data) or "anonymous"
     ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown")
     ip_first = str(ip).split(",", 1)[0].strip()
@@ -436,6 +436,14 @@ def validate_and_normalize_config(cfg: dict, path: Path) -> Dict:
     else:
         cfg["thumbs_dir"] = thumbs_dir.strip() or str(path.parent / "cache" / "thumbnails")
 
+    log_dir = cfg.get("log_dir")
+    if log_dir is None:
+        cfg["log_dir"] = str(path.parent / "logs")
+    elif not isinstance(log_dir, str):
+        raise ValueError("Config field 'log_dir' must be a string")
+    else:
+        cfg["log_dir"] = log_dir.strip() or str(path.parent / "logs")
+
     return cfg
 
 
@@ -457,6 +465,7 @@ def load_config(path: Path) -> Dict:
     cfg.setdefault("debug_enabled", False)
     cfg.setdefault("mount_script", "")
     cfg.setdefault("locale", "auto")
+    cfg.setdefault("log_dir", "./logs")
     cfg.setdefault(
         "direct_playback",
         {
@@ -477,10 +486,10 @@ def load_config(path: Path) -> Dict:
     return validate_and_normalize_config(cfg, path)
 
 
-def setup_logging(flush_interval_seconds: int = 60):
+def setup_logging(log_dir: str = "./logs", flush_interval_seconds: int = 60):
     from logging.handlers import MemoryHandler
 
-    log_path = Path.home() / ".openclaw" / "logs" / "movies.launchd.log"
+    log_path = Path(log_dir).expanduser().resolve() / "movies.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
