@@ -27,7 +27,7 @@ PY_MODULES = [
 
 
 setup(
-    name="cat-theatre",
+    name="plex-cat-theatre",
     version="0.1.0",
     description="Lightweight self-hosted movie browser and streaming server with optional Plex integration.",
     long_description=README,
@@ -56,9 +56,9 @@ setup(
     include_package_data=True,
     entry_points={
         "console_scripts": [
-            "cat-theatre-init=cat_theatre_init:main",
-            "cat-theatre-server=movies_server:main",
-            "cat-theatre-passcode=passcode:main",
+            "plex-cat-theatre-init=cat_theatre_init:main",
+            "plex-cat-theatre=movies_server:main",
+            "plex-cat-theatre-passcode=passcode:main",
         ]
     },
     classifiers=[
