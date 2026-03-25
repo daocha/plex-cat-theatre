@@ -147,6 +147,17 @@ If you deploy the app behind a reverse proxy under a prefix such as `/movie/`, o
 
 ---
 
+## Release Versioning
+
+Package versions are derived from Git tags.
+
+- TestPyPI/testing: use a development version such as `2026.3.26.dev1`
+- PyPI prerelease: use a release candidate such as `2026.3.26rc1`
+- PyPI stable: use a stable version such as `2026.3.26`
+- Git tags should be `v2026.3.26.dev1`, `v2026.3.26rc1`, and `v2026.3.26`
+
+---
+
 ## Configuration
 
 The sample config is intentionally sanitized and does not include:
