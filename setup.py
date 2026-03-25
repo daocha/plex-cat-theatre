@@ -28,7 +28,7 @@ PY_MODULES = [
 
 setup(
     name="plex-cat-theatre",
-    version="0.1.0",
+    version="2026.03.24",
     description="Lightweight self-hosted movie browser and streaming server with optional Plex integration.",
     long_description=README,
     long_description_content_type="text/markdown",
