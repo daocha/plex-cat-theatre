@@ -10,7 +10,7 @@
 
 **Sprachen**
 
-[English](./README.md) | [简体中文](./README.zh-CN.md) | [繁體中文（香港）](./README.zh-HK.md) | [繁體中文（台灣）](./README.zh-TW.md) | [Français](./README.fr.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | `Deutsch` | [ไทย](./README.th.md) | [Tiếng Việt](./README.vi.md) | [Nederlands](./README.nl.md)
+[English](https://github.com/daocha/plex-cat-theatre/blob/main/README.md) | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | [繁體中文（台灣）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md) | [Français](https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md) | [한국어](https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md) | [日本語](https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md) | `Deutsch` | [ไทย](https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md) | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | [Nederlands](https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md)
 
 ---
 
@@ -104,6 +104,7 @@ Dieses Bootstrap-Skript kann:
 - beim ersten Start `movies_config.json` aus der Beispielkonfiguration erstellen
 - ein lokales `.venv` anlegen
 - Python-Abhängigkeiten in diese lokale virtuelle Umgebung installieren
+- bei Bedarf konfigurationsrelative Ordner `cache/thumbnails` und `logs` anlegen
 - `ffmpeg` und `ffprobe` prüfen
 - optional beim Erzeugen des Hashes für den Private-Mode-Passcode helfen
 - den Server mit deiner lokalen Konfiguration starten
@@ -144,6 +145,17 @@ Wenn du die App hinter einem Reverse Proxy unter einem Präfix wie `/movie/` bet
 - `movies.min.js`: minifiziertes Frontend-Bundle
 - `movies.css`: Styles für Galerie und Player
 - `passcode.py`: Hilfsskript zum Rotieren des Private-Mode-Passcodes
+
+---
+
+## Release-Versionierung
+
+Paketversionen werden aus Git-Tags abgeleitet.
+
+- TestPyPI/Testen: verwende eine Entwicklungsversion wie `2026.3.26.dev1`
+- PyPI-Prerelease: verwende einen Release Candidate wie `2026.3.26rc1`
+- PyPI-Stable: verwende eine stabile Version wie `2026.3.26`
+- Git-Tags sollten `v2026.3.26.dev1`, `v2026.3.26rc1` und `v2026.3.26` sein
 
 ---
 

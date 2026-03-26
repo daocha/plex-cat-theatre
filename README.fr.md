@@ -10,7 +10,7 @@
 
 **Langues**
 
-[English](./README.md) | [简体中文](./README.zh-CN.md) | [繁體中文（香港）](./README.zh-HK.md) | [繁體中文（台灣）](./README.zh-TW.md) | `Français` | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [Deutsch](./README.de.md) | [ไทย](./README.th.md) | [Tiếng Việt](./README.vi.md) | [Nederlands](./README.nl.md)
+[English](https://github.com/daocha/plex-cat-theatre/blob/main/README.md) | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | [繁體中文（台灣）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md) | `Français` | [한국어](https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md) | [日本語](https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md) | [Deutsch](https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md) | [ไทย](https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md) | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | [Nederlands](https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md)
 
 ---
 
@@ -104,6 +104,7 @@ Ce script d’amorçage peut :
 - créer `movies_config.json` à partir de l’exemple de configuration lors du premier lancement
 - créer un `.venv` local
 - installer les dépendances Python dans cet environnement virtuel local
+- créer si nécessaire les dossiers `cache/thumbnails` et `logs` relatifs au fichier de configuration
 - vérifier `ffmpeg` et `ffprobe`
 - vous aider éventuellement à générer le hash du code privé
 - démarrer le serveur avec votre configuration locale
@@ -144,6 +145,17 @@ Si vous déployez l’application derrière un reverse proxy sous un préfixe co
 - `movies.min.js` : bundle frontend minifié
 - `movies.css` : styles de la galerie et du lecteur
 - `passcode.py` : helper pour faire tourner le code de la section privée
+
+---
+
+## Versionnement Des Releases
+
+Les versions du paquet sont dérivées des tags Git.
+
+- TestPyPI/test : utilisez une version de développement comme `2026.3.26.dev1`
+- Préversion PyPI : utilisez une release candidate comme `2026.3.26rc1`
+- Version stable PyPI : utilisez une version stable comme `2026.3.26`
+- Les tags Git doivent être `v2026.3.26.dev1`, `v2026.3.26rc1` et `v2026.3.26`
 
 ---
 

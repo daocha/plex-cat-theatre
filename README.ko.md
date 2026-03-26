@@ -10,7 +10,7 @@
 
 **언어**
 
-[English](./README.md) | [简体中文](./README.zh-CN.md) | [繁體中文（香港）](./README.zh-HK.md) | [繁體中文（台灣）](./README.zh-TW.md) | [Français](./README.fr.md) | `한국어` | [日本語](./README.ja.md) | [Deutsch](./README.de.md) | [ไทย](./README.th.md) | [Tiếng Việt](./README.vi.md) | [Nederlands](./README.nl.md)
+[English](https://github.com/daocha/plex-cat-theatre/blob/main/README.md) | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | [繁體中文（台灣）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md) | [Français](https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md) | `한국어` | [日本語](https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md) | [Deutsch](https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md) | [ไทย](https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md) | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | [Nederlands](https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md)
 
 ---
 
@@ -104,6 +104,7 @@ plex-cat-theatre --config ~/movies_config.json
 - 첫 실행 시 샘플 설정으로부터 `movies_config.json` 생성
 - 로컬 `.venv` 생성
 - Python 의존성을 해당 로컬 가상환경에 설치
+- 필요할 때 설정 파일 기준의 `cache/thumbnails` 및 `logs` 폴더 생성
 - `ffmpeg` 및 `ffprobe` 확인
 - 선택적으로 비공개 모드 비밀번호 해시 생성 지원
 - 로컬 설정으로 서버 시작
@@ -144,6 +145,17 @@ http://localhost:9245
 - `movies.min.js`: 압축된 프론트엔드 번들
 - `movies.css`: 갤러리 및 플레이어 스타일
 - `passcode.py`: 비공개 모드 비밀번호를 교체하는 헬퍼
+
+---
+
+## 릴리스 버전 규칙
+
+패키지 버전은 Git 태그에서 파생됩니다.
+
+- TestPyPI/테스트: `2026.3.26.dev1` 같은 개발 버전 사용
+- PyPI 프리릴리스: `2026.3.26rc1` 같은 릴리스 후보 사용
+- PyPI 안정판: `2026.3.26` 같은 안정 버전 사용
+- Git 태그는 `v2026.3.26.dev1`, `v2026.3.26rc1`, `v2026.3.26` 형식을 사용
 
 ---
 
