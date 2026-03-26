@@ -59,7 +59,7 @@ Cat Theatre は意図的に軽量です。
 ### Python
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 現在の Python パッケージ:

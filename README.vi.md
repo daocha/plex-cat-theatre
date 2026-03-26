@@ -59,7 +59,7 @@ Nó được thiết kế cho:
 ### Python
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 Các gói Python hiện tại:

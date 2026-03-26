@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from movies_server_core import DEFAULT_PORT, load_config
+from movies_server_core import DEFAULT_PORT, load_config, startup_console_summary
 
 
 class LoadConfigTests(unittest.TestCase):
@@ -97,6 +97,21 @@ class LoadConfigTests(unittest.TestCase):
 
         self.assertEqual(cfg["thumbs_dir"], str(path.parent / "cache" / "thumbnails"))
         self.assertEqual(cfg["log_dir"], str(path.parent / "logs"))
+
+    def test_startup_console_summary_uses_log_path_and_access_url(self):
+        summary = startup_console_summary(
+            {
+                "host": "0.0.0.0",
+                "port": 9245,
+                "log_dir": "/tmp/cat-theatre-logs",
+            }
+        )
+
+        self.assertEqual(
+            summary["log_path"],
+            str((Path("/tmp/cat-theatre-logs").expanduser().resolve() / "movies.log")),
+        )
+        self.assertEqual(summary["access_url"], "http://localhost:9245")
 
 
 if __name__ == "__main__":

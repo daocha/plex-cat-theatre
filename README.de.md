@@ -59,7 +59,7 @@ Es ist ausgelegt für:
 ### Python
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 Aktuelle Python-Pakete:
