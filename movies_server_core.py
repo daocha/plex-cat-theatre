@@ -517,3 +517,15 @@ def setup_logging(log_dir: str = "./logs", flush_interval_seconds: int = 60):
 
     threading.Thread(target=periodic_flush, daemon=True).start()
     return mem_handler
+
+
+def startup_console_summary(cfg: dict) -> dict[str, str]:
+    host = str(cfg.get("host", "") or "").strip() or "0.0.0.0"
+    port = int(cfg.get("port", DEFAULT_PORT) or DEFAULT_PORT)
+    display_host = "localhost" if host == "0.0.0.0" else host
+    log_dir = str(cfg.get("log_dir", "./logs") or "./logs").strip() or "./logs"
+    log_path = Path(log_dir).expanduser().resolve() / "movies.log"
+    return {
+        "log_path": str(log_path),
+        "access_url": f"http://{display_host}:{port}",
+    }

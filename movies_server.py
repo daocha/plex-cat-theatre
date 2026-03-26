@@ -47,6 +47,7 @@ from movies_server_core import (
     save_auth_state,
     save_private_state,
     setup_logging,
+    startup_console_summary,
     verify_passcode,
 )
 from movies_server_auth import (
@@ -1227,6 +1228,10 @@ def main():
     cfg = load_config(args.config)
     cfg["_config_path"] = str(args.config)
     setup_logging(cfg.get("log_dir", "./logs"), flush_interval_seconds=60)
+    summary = startup_console_summary(cfg)
+    print(f"Logs: {summary['log_path']}")
+    print(f"Open Cat Theatre at: {summary['access_url']}")
+    print("Starting server...")
     App(cfg).run()
 
 

@@ -59,7 +59,7 @@ Cat Theatre 的设计目标是保持轻量：
 ### Python
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 当前 Python 包：
