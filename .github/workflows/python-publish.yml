@@ -30,13 +30,52 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pip install -r requirements.txt pytest
+          python -m pip install -r requirements.txt pytest build twine setuptools-scm
+          python -m pip install -e .
           pytest
 
       - name: Build release distributions
         run: |
-          python -m pip install build
           python -m build
+
+      - name: Validate distributions
+        run: |
+          python -m twine check dist/*
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheel = next(Path("dist").glob("*.whl"))
+          required = {
+              "cat_theatre_assets/index.html",
+              "cat_theatre_assets/movies.css",
+              "cat_theatre_assets/movies.js",
+              "cat_theatre_assets/movies.min.js",
+              "cat_theatre_assets/plex.svg",
+              "cat_theatre_assets/movies_config.sample.json",
+          }
+
+          with ZipFile(wheel) as zf:
+              names = set(zf.namelist())
+
+          missing = sorted(required - names)
+          if missing:
+              raise SystemExit(f"Wheel is missing required assets: {missing}")
+          PY
+
+      - name: Smoke test installed package
+        run: |
+          python -m venv /tmp/plex-cat-theatre-smoke
+          /tmp/plex-cat-theatre-smoke/bin/pip install --upgrade pip
+          /tmp/plex-cat-theatre-smoke/bin/pip install dist/*.whl
+          /tmp/plex-cat-theatre-smoke/bin/plex-cat-theatre-init --help
+          /tmp/plex-cat-theatre-smoke/bin/plex-cat-theatre --help
+          /tmp/plex-cat-theatre-smoke/bin/plex-cat-theatre-passcode --help
+          mkdir -p /tmp/plex-cat-theatre-smoke-home
+          /tmp/plex-cat-theatre-smoke/bin/plex-cat-theatre-init \
+            --config /tmp/plex-cat-theatre-smoke-home/movies_config.json \
+            --force
+          test -f /tmp/plex-cat-theatre-smoke-home/movies_config.json
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4

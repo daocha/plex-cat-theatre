@@ -10,7 +10,7 @@
 
 **語言**
 
-[English](./README.md) | [简体中文](./README.zh-CN.md) | [繁體中文（香港）](./README.zh-HK.md) | `繁體中文（台灣）` | [Français](./README.fr.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [Deutsch](./README.de.md) | [ไทย](./README.th.md) | [Tiếng Việt](./README.vi.md) | [Nederlands](./README.nl.md)
+[English](https://github.com/daocha/plex-cat-theatre/blob/main/README.md) | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | `繁體中文（台灣）` | [Français](https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md) | [한국어](https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md) | [日本語](https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md) | [Deutsch](https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md) | [ไทย](https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md) | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | [Nederlands](https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md)
 
 ---
 
@@ -104,6 +104,7 @@ plex-cat-theatre --config ~/movies_config.json
 - 首次執行時根據範例設定建立 `movies_config.json`
 - 建立本地 `.venv`
 - 將 Python 依賴安裝到這個本地虛擬環境
+- 在需要時按設定檔位置建立 `cache/thumbnails` 與 `logs` 資料夾
 - 檢查 `ffmpeg` 和 `ffprobe`
 - 可選地協助你產生私密模式密碼雜湊
 - 以本地設定啟動伺服器
@@ -144,6 +145,17 @@ http://localhost:9245
 - `movies.min.js`：前端壓縮版本
 - `movies.css`：圖庫與播放器樣式
 - `passcode.py`：用於輪換私密模式密碼的輔助腳本
+
+---
+
+## 發佈版本規則
+
+套件版本由 Git 標籤推導而來。
+
+- TestPyPI/測試：使用如 `2026.3.26.dev1` 的開發版本
+- PyPI 預發佈：使用如 `2026.3.26rc1` 的候選發佈版本
+- PyPI 穩定版：使用如 `2026.3.26` 的穩定版本
+- Git 標籤應為 `v2026.3.26.dev1`、`v2026.3.26rc1` 與 `v2026.3.26`
 
 ---
 

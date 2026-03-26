@@ -223,6 +223,16 @@ def infer_mount_prefix_from_path(path: str) -> str:
     return ""
 
 
+def resolve_config_path(path: Path, raw_value: Optional[str], *default_parts: str) -> str:
+    value = "" if raw_value is None else str(raw_value).strip()
+    if not value:
+        return str(path.parent.joinpath(*default_parts))
+    resolved = Path(value).expanduser()
+    if not resolved.is_absolute():
+        resolved = path.parent / resolved
+    return str(resolved)
+
+
 def resolve_app_root() -> str:
     direct = normalize_mount_prefix(request.environ.get("SCRIPT_NAME") or request.script_root or "")
     if direct:
@@ -429,20 +439,14 @@ def validate_and_normalize_config(cfg: dict, path: Path) -> Dict:
     cfg["plex"] = plex
 
     thumbs_dir = cfg.get("thumbs_dir")
-    if thumbs_dir is None:
-        cfg["thumbs_dir"] = str(path.parent / "cache" / "thumbnails")
-    elif not isinstance(thumbs_dir, str):
+    if thumbs_dir is not None and not isinstance(thumbs_dir, str):
         raise ValueError("Config field 'thumbs_dir' must be a string")
-    else:
-        cfg["thumbs_dir"] = thumbs_dir.strip() or str(path.parent / "cache" / "thumbnails")
+    cfg["thumbs_dir"] = resolve_config_path(path, thumbs_dir, "cache", "thumbnails")
 
     log_dir = cfg.get("log_dir")
-    if log_dir is None:
-        cfg["log_dir"] = str(path.parent / "logs")
-    elif not isinstance(log_dir, str):
+    if log_dir is not None and not isinstance(log_dir, str):
         raise ValueError("Config field 'log_dir' must be a string")
-    else:
-        cfg["log_dir"] = log_dir.strip() or str(path.parent / "logs")
+    cfg["log_dir"] = resolve_config_path(path, log_dir, "logs")
 
     return cfg
 
@@ -465,7 +469,6 @@ def load_config(path: Path) -> Dict:
     cfg.setdefault("debug_enabled", False)
     cfg.setdefault("mount_script", "")
     cfg.setdefault("locale", "auto")
-    cfg.setdefault("log_dir", "./logs")
     cfg.setdefault(
         "direct_playback",
         {

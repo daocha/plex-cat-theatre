@@ -10,7 +10,7 @@
 
 **Talen**
 
-[English](./README.md) | [简体中文](./README.zh-CN.md) | [繁體中文（香港）](./README.zh-HK.md) | [繁體中文（台灣）](./README.zh-TW.md) | [Français](./README.fr.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [Deutsch](./README.de.md) | [ไทย](./README.th.md) | [Tiếng Việt](./README.vi.md) | `Nederlands`
+[English](https://github.com/daocha/plex-cat-theatre/blob/main/README.md) | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | [繁體中文（台灣）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md) | [Français](https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md) | [한국어](https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md) | [日本語](https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md) | [Deutsch](https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md) | [ไทย](https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md) | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | `Nederlands`
 
 ---
 
@@ -104,6 +104,7 @@ Dit bootstrapscript kan:
 - bij de eerste keer opstarten `movies_config.json` maken vanuit de voorbeeldconfiguratie
 - een lokale `.venv` aanmaken
 - Python-afhankelijkheden in die lokale virtuele omgeving installeren
+- indien nodig configuratie-relatieve mappen `cache/thumbnails` en `logs` aanmaken
 - `ffmpeg` en `ffprobe` controleren
 - optioneel helpen bij het genereren van de hash voor de privémodus-passcode
 - de server starten met je lokale configuratie
@@ -144,6 +145,17 @@ Als je de app achter een reverse proxy onder een prefix zoals `/movie/` inzet, o
 - `movies.min.js`: geminificeerde frontendbundle
 - `movies.css`: stijlen voor galerij en speler
 - `passcode.py`: helper voor het roteren van de privémodus-passcode
+
+---
+
+## Releaseversies
+
+Pakketversies worden afgeleid van Git-tags.
+
+- TestPyPI/testen: gebruik een ontwikkelversie zoals `2026.3.26.dev1`
+- PyPI-prerelease: gebruik een release candidate zoals `2026.3.26rc1`
+- PyPI-stable: gebruik een stabiele versie zoals `2026.3.26`
+- Git-tags horen `v2026.3.26.dev1`, `v2026.3.26rc1` en `v2026.3.26` te zijn
 
 ---
 
