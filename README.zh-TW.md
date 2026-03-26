@@ -59,7 +59,7 @@ Cat Theatre 刻意保持輕量：
 ### Python
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 目前 Python 套件：

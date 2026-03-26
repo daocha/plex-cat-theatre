@@ -59,7 +59,7 @@ Het is ontworpen voor:
 ### Python
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 Huidige Python-pakketten:

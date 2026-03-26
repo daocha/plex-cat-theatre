@@ -12,6 +12,9 @@ SAMPLE_CONFIG_PATH="${SCRIPT_DIR}/movies_config.sample.json"
 VENV_PATH="${SCRIPT_DIR}/.venv"
 PYTHON_BIN="${VENV_PATH}/bin/python"
 PIP_BIN="${VENV_PATH}/bin/pip"
+INSTALL_STATE_FILE_NAME=".plex-cat-theatre-install-state"
+FORCE_REINSTALL="${FORCE_REINSTALL:-0}"
+LOCAL_PRETEND_VERSION="${SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PLEX_CAT_THEATRE:-0.0.dev0}"
 
 require_cmd() {
   local cmd="$1"
@@ -21,6 +24,21 @@ require_cmd() {
     echo "Hint: ${help_text}"
     exit 1
   fi
+}
+
+compute_install_fingerprint() {
+  local files=()
+  local file
+  for file in pyproject.toml setup.py; do
+    if [[ -f "${SCRIPT_DIR}/${file}" ]]; then
+      files+=("${SCRIPT_DIR}/${file}")
+    fi
+  done
+  if [[ "${#files[@]}" -eq 0 ]]; then
+    printf 'no-packaging-files\n'
+    return
+  fi
+  shasum -a 256 "${files[@]}" | shasum -a 256 | awk '{print $1}'
 }
 
 read_config_value() {
@@ -106,9 +124,32 @@ if [[ ! -d "${VENV_PATH}" ]]; then
   python3 -m venv "${VENV_PATH}"
 fi
 
-# Upgrade pip first so a clean machine can install requirements more reliably.
+# Upgrade pip first so a clean machine can install the project reliably.
 "${PYTHON_BIN}" -m pip install --upgrade pip >/dev/null
-"${PIP_BIN}" install -r "${SCRIPT_DIR}/requirements.txt"
+INSTALL_STATE_FILE="${VENV_PATH}/${INSTALL_STATE_FILE_NAME}"
+CURRENT_INSTALL_FINGERPRINT="$(compute_install_fingerprint)"
+STORED_INSTALL_FINGERPRINT=""
+if [[ -f "${INSTALL_STATE_FILE}" ]]; then
+  STORED_INSTALL_FINGERPRINT="$(<"${INSTALL_STATE_FILE}")"
+fi
+
+NEEDS_REINSTALL=0
+if [[ "${FORCE_REINSTALL}" == "1" ]]; then
+  NEEDS_REINSTALL=1
+elif ! "${PYTHON_BIN}" -c "import cat_theatre_init, movies_server, passcode" >/dev/null 2>&1; then
+  NEEDS_REINSTALL=1
+elif [[ "${CURRENT_INSTALL_FINGERPRINT}" != "${STORED_INSTALL_FINGERPRINT}" ]]; then
+  NEEDS_REINSTALL=1
+fi
+
+if [[ "${NEEDS_REINSTALL}" == "1" ]]; then
+  echo "Installing local package into ${VENV_PATH}"
+  SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PLEX_CAT_THEATRE="${LOCAL_PRETEND_VERSION}" \
+    "${PIP_BIN}" install -e "${SCRIPT_DIR}"
+  printf '%s\n' "${CURRENT_INSTALL_FINGERPRINT}" > "${INSTALL_STATE_FILE}"
+else
+  echo "Existing editable install detected; skipping reinstall."
+fi
 
 THUMBS_PATH="$(ensure_thumbs_dir_from_config)"
 
