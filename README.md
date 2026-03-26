@@ -10,7 +10,7 @@
 
 **Languages**
 
-`English` | [简体中文](./README.zh-CN.md) | [繁體中文（香港）](./README.zh-HK.md) | [繁體中文（台灣）](./README.zh-TW.md) | [Français](./README.fr.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [Deutsch](./README.de.md) | [ไทย](./README.th.md) | [Tiếng Việt](./README.vi.md) | [Nederlands](./README.nl.md)
+`English` | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | [繁體中文（台灣）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md) | [Français](https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md) | [한국어](https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md) | [日本語](https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md) | [Deutsch](https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md) | [ไทย](https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md) | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | [Nederlands](https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md)
 
 ---
 
@@ -104,6 +104,7 @@ This bootstrap script can:
 - create `movies_config.json` from the sample config on first run
 - create a local `.venv`
 - install Python dependencies into that local virtual environment
+- create config-relative `cache/thumbnails` and `logs` folders when needed
 - check `ffmpeg` and `ffprobe`
 - optionally help you generate the private-mode passcode hash
 - start the server with your local config

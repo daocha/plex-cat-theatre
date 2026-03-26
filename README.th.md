@@ -10,7 +10,7 @@
 
 **ภาษา**
 
-[English](./README.md) | [简体中文](./README.zh-CN.md) | [繁體中文（香港）](./README.zh-HK.md) | [繁體中文（台灣）](./README.zh-TW.md) | [Français](./README.fr.md) | [한국어](./README.ko.md) | [日本語](./README.ja.md) | [Deutsch](./README.de.md) | `ไทย` | [Tiếng Việt](./README.vi.md) | [Nederlands](./README.nl.md)
+[English](https://github.com/daocha/plex-cat-theatre/blob/main/README.md) | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | [繁體中文（台灣）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md) | [Français](https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md) | [한국어](https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md) | [日本語](https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md) | [Deutsch](https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md) | `ไทย` | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | [Nederlands](https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md)
 
 ---
 
@@ -104,6 +104,7 @@ plex-cat-theatre --config ~/movies_config.json
 - สร้าง `movies_config.json` จาก config ตัวอย่างในการรันครั้งแรก
 - สร้าง `.venv` ภายในเครื่อง
 - ติดตั้ง dependency ของ Python ลงใน virtual environment ภายในเครื่องนั้น
+- สร้างโฟลเดอร์ `cache/thumbnails` และ `logs` แบบอ้างอิงตามตำแหน่งไฟล์ config เมื่อจำเป็น
 - ตรวจสอบ `ffmpeg` และ `ffprobe`
 - ช่วยสร้างแฮชรหัสผ่านสำหรับโหมดส่วนตัวได้แบบเลือกทำ
 - เริ่มเซิร์ฟเวอร์ด้วย config ภายในเครื่องของคุณ
@@ -144,6 +145,17 @@ http://localhost:9245
 - `movies.min.js`: bundle frontend แบบ minified
 - `movies.css`: สไตล์ของแกลเลอรีและตัวเล่น
 - `passcode.py`: helper สำหรับหมุนรหัสผ่านโหมดส่วนตัว
+
+---
+
+## การกำหนดเวอร์ชันรีลีส
+
+เวอร์ชันแพ็กเกจอ้างอิงจาก Git tag
+
+- TestPyPI/การทดสอบ: ใช้เวอร์ชันพัฒนา เช่น `2026.3.26.dev1`
+- PyPI prerelease: ใช้ release candidate เช่น `2026.3.26rc1`
+- PyPI stable: ใช้เวอร์ชันเสถียร เช่น `2026.3.26`
+- Git tag ควรเป็น `v2026.3.26.dev1`, `v2026.3.26rc1` และ `v2026.3.26`
 
 ---
 

@@ -84,6 +84,20 @@ class LoadConfigTests(unittest.TestCase):
         cfg = load_config(path)
         self.assertEqual(cfg["locale"], "zh-CN")
 
+    def test_load_config_resolves_relative_storage_paths_from_config_dir(self):
+        path = self.write_config(
+            {
+                "root": ["~/Movies"],
+                "thumbs_dir": "./cache/thumbnails",
+                "log_dir": "./logs",
+            }
+        )
+
+        cfg = load_config(path)
+
+        self.assertEqual(cfg["thumbs_dir"], str(path.parent / "cache" / "thumbnails"))
+        self.assertEqual(cfg["log_dir"], str(path.parent / "logs"))
+
 
 if __name__ == "__main__":
     unittest.main()

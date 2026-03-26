@@ -9,10 +9,14 @@ from typing import Optional
 
 ASSET_PACKAGE = "cat_theatre_assets"
 ROOT = Path(__file__).resolve().parent
+SOURCE_ASSET_ROOT = ROOT / ASSET_PACKAGE
 
 
 def _local_asset_path(name: str, subdir: Optional[str] = None) -> Path:
     if subdir:
+        package_local = SOURCE_ASSET_ROOT / subdir / name
+        if package_local.exists():
+            return package_local
         return ROOT / subdir / name
     return ROOT / name
 
