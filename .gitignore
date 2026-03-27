@@ -12,5 +12,6 @@ logs/
 .venv*/
 .env_*
 .env.*
+.env
 .codex
 .copilot
