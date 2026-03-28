@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
 movies_config.json
 movies_auth_state.json
 movies_state.json
