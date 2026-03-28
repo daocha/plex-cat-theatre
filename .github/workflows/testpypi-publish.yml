@@ -36,6 +36,7 @@ jobs:
 
       - name: Run tests
         run: |
+          python -m pip install --upgrade pip
           python -m pip install pytest build twine setuptools-scm
           python -m pip install -e .
           pytest
