@@ -14,15 +14,6 @@ require_cmd() {
   fi
 }
 
-append_path_to_profile() {
-  local profile_path="$1"
-  local line='export PATH="$HOME/.local/bin:$PATH"'
-  touch "${profile_path}"
-  if ! grep -Fqx "${line}" "${profile_path}"; then
-    printf '\n%s\n' "${line}" >> "${profile_path}"
-  fi
-}
-
 require_cmd "${PYTHON_BIN}" "Install Python 3 first."
 
 "${PYTHON_BIN}" -m pip install --upgrade pip >/dev/null
@@ -40,18 +31,6 @@ print(DEFAULT_CONFIG_PATH)
 PY
 )"
 
-if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
-  mkdir -p "${BIN_DIR}"
-  case "${SHELL##*/}" in
-    zsh)
-      append_path_to_profile "${HOME}/.zprofile"
-      ;;
-    bash)
-      append_path_to_profile "${HOME}/.bash_profile"
-      ;;
-  esac
-fi
-
 if [[ ! -f "${CONFIG_PATH}" ]]; then
   "${BIN_DIR}/plex-cat-theatre-init"
 fi
@@ -60,10 +39,5 @@ echo "Installed ${PACKAGE_NAME} using the active python3 environment"
 echo "Commands are expected in ${BIN_DIR}"
 echo "Config: ${CONFIG_PATH}"
 echo
-if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
-  echo "If your current shell does not see the command yet, run:"
-  echo "export PATH=\"${BIN_DIR}:\$PATH\""
-  echo
-fi
 echo "Start the server with:"
 echo "plex-cat-theatre --config ${CONFIG_PATH}"
