@@ -23,27 +23,7 @@ append_path_to_profile() {
   fi
 }
 
-resolve_user_home() {
-  "$PYTHON_BIN" - <<'PY'
-from pathlib import Path
-import os
-import pwd
-
-sudo_user = os.getenv("SUDO_USER", "").strip()
-if sudo_user and sudo_user != "root":
-    try:
-        print(pwd.getpwnam(sudo_user).pw_dir)
-    except KeyError:
-        print(Path.home())
-else:
-    print(Path.home())
-PY
-}
-
 require_cmd "${PYTHON_BIN}" "Install Python 3 first."
-
-TARGET_HOME="$(resolve_user_home)"
-CONFIG_PATH="${TARGET_HOME}/movies_config.json"
 
 "${PYTHON_BIN}" -m pip install --upgrade pip >/dev/null
 "${PYTHON_BIN}" -m pip install --upgrade "${PACKAGE_NAME}"
@@ -51,6 +31,12 @@ CONFIG_PATH="${TARGET_HOME}/movies_config.json"
 BIN_DIR="$("${PYTHON_BIN}" - <<'PY'
 import sysconfig
 print(sysconfig.get_path("scripts"))
+PY
+)"
+
+CONFIG_PATH="$("${PYTHON_BIN}" - <<'PY'
+from cat_theatre_init import DEFAULT_CONFIG_PATH
+print(DEFAULT_CONFIG_PATH)
 PY
 )"
 
@@ -67,7 +53,7 @@ if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
 fi
 
 if [[ ! -f "${CONFIG_PATH}" ]]; then
-  "${BIN_DIR}/plex-cat-theatre-init" --config "${CONFIG_PATH}"
+  "${BIN_DIR}/plex-cat-theatre-init"
 fi
 
 echo "Installed ${PACKAGE_NAME} using the active python3 environment"
