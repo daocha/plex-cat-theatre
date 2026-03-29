@@ -1,6 +1,37 @@
-# Cat Theatre Movies Server
+<div align="center">
+  <img width="700" alt="7844F597-CBA9-4EAD-80DE-19991552F906" src="https://github.com/user-attachments/assets/2f1fc4cf-8b63-47d0-aebf-53355dd8f032" />
 
-> Lightweight self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`, with optional _`Plex`_ integration for compatibility-focused playback.
+  <h1>Cat Theatre Movies Server 🐱</h1>
+  <p>
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.md">English</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md">Deutsch</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md">Français</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md">日本語</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md">한국어</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md">Nederlands</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md">ไทย</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md">Tiếng Việt</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md">简体中文</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md">繁體中文（香港）</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md">繁體中文（台灣）</a>
+  </p>
+  <p><strong>Super lightweight, Privacy Mode 🔐, Cross-device, Smart Streaming</strong></p>
+  <p>No App is required. Easy server installation. Mobile friendly user interface, connecting your NAS anywhere, with optional PLEX integration</p>
+  <p>
+    <img src="https://img.shields.io/badge/stability-experimental-orange.svg" alt="Experimental" />
+    <a href="https://opensource.org/licenses/MIT">
+      <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" />
+    </a>
+    <a href="http://github.com/daocha/plex-cat-theatre/releases/latest">
+      <img src="https://img.shields.io/github/v/release/daocha/plex-cat-theatre?label=Latest&color=green" alt="Latest Release" />
+    </a>
+    <img src="https://img.shields.io/badge/python-3.9+-blue" alt="Python 3.9+" />
+  </p>
+</div>
+
+
+
+> No heavy dependency, everything transparent. Lightweight self-hosted movie browser and streaming server built with Flask, Waitress, and `ffmpeg`, with optional _`Plex`_ integration for compatibility-focused playback.
 
 ---
 
@@ -8,68 +39,44 @@
 
 ---
 
-**Languages**
-
-`English` | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | [繁體中文（台灣）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md) | [Français](https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md) | [한국어](https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md) | [日本語](https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md) | [Deutsch](https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md) | [ไทย](https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md) | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | [Nederlands](https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md)
-
----
-
-## Overview
+## ✨ Why Use It
 
 Cat Theatre is intentionally lightweight:
 
-- small Python dependency surface
-- no database requirement
-- file-system-first cataloging
-- portable polling-based scan flow instead of OS-specific watcher dependence
-- optional Plex integration layered on top rather than required for core playback
+- 🩷 No Plex subscription 💰 is reuqired for _*Remote Access*_
+- ✅ Small Python dependency surface
+- ✅ No database requirement
+- ✅ File-system-first cataloging
+- ✅ Compatible with 🖥️ Desktop, 📱 Mobile, Tablet
+- ✅ Portable polling-based scan flow instead of OS-specific watcher dependence
+- 🔶 Optional Plex integration layered on top rather than required for core playback
 
-It is designed for:
+## ✴️ Features
 
-- local media libraries spread across one or more folders
-- thumbnail and preview generation
-- private-folder access control by device
-- reverse-proxy deployment under a path prefix such as `/movie/`
-- mixed playback strategies: direct file playback, built-in local transcoding, or Plex-backed HLS
-
----
-
-## Features
-
-- multi-root media scanning
-- poster thumbnails and preview frame generation
-- private folders with device-based unlock
-- native direct playback for browser-safe formats
-- built-in local transcoding for `.mkv` and `.ts` when enabled
-- Plex integration for playback, posters, subtitles, and HLS proxying
-- context-path-aware routing for reverse proxies
-- browser image caching plus IndexedDB metadata caching
-
-### UX And Playback Notes
-
-- the built-in debug panel lives in the bottom-right and can slide to the nearest edge
-- playback automatically prefers the safer path for the current file and device
-- manual direct/Plex overrides are stored per video in IndexedDB
-- cached thumbnails and metadata stay within browser storage limits
+- 🎬 Local / NAS media libraries spread across multiple folders
+- 🌄 Thumbnail / Poster and preview generation
+- 🔐 Private-folder with device-based unlock
+- 🔗 Reverse-proxy deployment under a path prefix such as `http://192.168.1.100/movie/`
+- 📽️ Mixed playback strategies: direct playback, built-in local transcoding for `.mkv` and `.ts` , or Plex-backed HLS proxying. Easy switch per media
+- 🌐 Browser image caching plus IndexedDB metadata caching
 
 ---
-
-## Requirements
-
-### Python
-
-```bash
-python -m pip install -e .
+→ Setup with one-liner: 
 ```
+curl -fsSL https://raw.githubusercontent.com/daocha/plex-cat-theatre/main/install.sh | bash
+```
+---
+
+## 🟢 Requirements
+
+### Python 3.9 or newer 
 
 Current Python packages:
 
 - `Flask`
 - `waitress`
 
-### System Binaries
-
-Required for metadata probing, previews, thumbnails, and local transcoding:
+### System Binaries Required for metadata probing, previews, thumbnails, and local transcoding:
 
 - `ffmpeg`
 - `ffprobe`
@@ -83,9 +90,15 @@ which ffprobe
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-If you install the published PyPI package, use:
+
+### → Option A: Setup with one-liner: 
+```
+curl -fsSL https://raw.githubusercontent.com/daocha/plex-cat-theatre/main/install.sh | bash
+```
+
+### → Option B: Install from PyPI with pip
 
 ```bash
 pip install plex-cat-theatre
@@ -93,9 +106,11 @@ plex-cat-theatre-init
 plex-cat-theatre --config ~/movies_config.json
 ```
 
-Preferred startup method:
+### → Option C: Preferred startup method
 
 ```bash
+git clone https://github.com/daocha/plex-cat-theatre
+cd plex-cat-theatre
 ./startup.sh
 ```
 
@@ -119,23 +134,37 @@ cp movies_config.sample.json movies_config.json
 
 2. Edit `movies_config.json` for your environment.
 
-3. Start the server:
+### 🌐 Start the server:
 
 ```bash
+# if you follow Option A or Option B, then run
+plex-cat-theatre --config ~/movies_config.json
+
+# if you follow Option C, then run
 python3 movies_server.py --config movies_config.json
 ```
 
-4. Open the UI:
+Open the UI:
 
 ```text
 http://localhost:9245
 ```
+### 🔑 Change Passcode
+```bash
+# if you follow Option A or Option B, then run
+plex-cat-theatre-passcode newpasscode
 
-If you deploy the app behind a reverse proxy under a prefix such as `/movie/`, open the prefixed URL instead.
-
+# if you follow Option C, then run
+python3 passcode.py newpasscode
+```
+- private folders are hidden unless the device is authorized
+- unlock state is tied to a device ID
+- approved devices are stored server-side
+- The script can rotate the private-mode passcode and clear approvals
+  
 ---
 
-## Project Structure
+## 🗂️ Project Structure
 
 - `movies_server.py`: Flask entrypoint and route wiring
 - `movies_server_core.py`: shared server helpers for auth, config, cookies, and mount-path handling
@@ -148,42 +177,80 @@ If you deploy the app behind a reverse proxy under a prefix such as `/movie/`, o
 
 ---
 
-## Release Versioning
-
-Package versions are derived from Git tags.
-
-- TestPyPI/testing: use a development version such as `2026.3.26.dev1`
-- PyPI prerelease: use a release candidate such as `2026.3.26rc1`
-- PyPI stable: use a stable version such as `2026.3.26`
-- Git tags should be `v2026.3.26.dev1`, `v2026.3.26rc1`, and `v2026.3.26`
-
----
-
-## Configuration
+## ⚙️ Configuration
 
 The sample config is intentionally sanitized and does not include:
 
 - real file-system paths
 - real Plex tokens
-- real passcodes
+- real hashed passcodes
 - device-specific values
 
-### Important Fields
+### 📍 Important Fields
 
-- `root`: media roots to scan
-- `thumbs_dir`: directory for thumbnails and preview frames
-- `private_folder`: folder prefixes treated as private
-- `private_passcode`: private-mode passcode hash
-- `mount_script`: optional command used when playback hits a missing media folder
-- `transcode`: enable the catalog-side background transcode worker for source containers such as `.mkv` and `.ts`; this can generate separate transcoded sidecar media files alongside the source library, so it is usually best left `false`, especially when Plex integration is enabled
-- `auto_scan_on_start`: rescan media on startup
-- `on_demand_transcode`: enable runtime player transcoding for source containers, using hardware encode when available and falling back to software encode when needed
-- `on_demand_hls`: enable built-in HLS playlists for source containers
-- `enable_plex_server`: enable Plex integration
-- `plex.base_url`: Plex server base URL
-- `plex.token`: Plex token
-- `debug_enabled`: show the built-in debug overlay
-- `direct_playback`: object with `enabled` and `audio_whitelist`
+<table>
+  <tr>
+    <td width="200"><code>root</code></td>
+    <td>media roots to scan (support multiple folders)</td>
+  </tr>
+  <tr>
+    <td><code>thumbs_dir</code></td>
+    <td>directory for thumbnails and preview frames. Default <code>./cache/thumbnails</code></td>
+  </tr>
+  <tr>
+    <td><code>private_folder</code></td>
+    <td>Folder prefixes treated as private. Example <code>Personal</code>. Anything under <code>Personal</code> folder will be locked until you unlock it from the UI.</td>
+  </tr>
+  <tr>
+    <td><code>private_passcode</code></td>
+    <td>private-mode passcode hash (you should not directly update it with plain text). You you want to update it, refer to <code>Change Passcode</code> section.</td>
+  </tr>
+  <tr>
+    <td><code>mount_script</code></td>
+    <td>[optional] Command used when playback hits a missing media folder due to folder accidential unmounted.</td>
+  </tr>
+  <tr>
+    <td><code>transcode</code></td>
+    <td>Enable the catalog-side background transcode worker for source containers such as `.mkv` and `.ts`; this can generate separate transcoded sidecar media files alongside the source library, so it is usually best left `false`, especially when Plex integration is enabled. Default <code>false</code>/td>
+  </tr>
+  <tr>
+    <td><code>auto_scan_on_start</code></td>
+    <td>Rescan media on startup. Default <code>false</code></td>
+  </tr>
+  <tr>
+    <td><code>on_demand_transcode</code></td>
+    <td>Enable runtime player transcoding for source containers, using hardware encode when available and falling back to software encode when needed. Default <code>true</code></td>
+  </tr>
+  <tr>
+    <td><code>on_demand_hls</code></td>
+    <td>Enable built-in HLS playlists for source containers. Default <code>true</code></td>
+  </tr>
+  <tr>
+  <td><code>enable_plex_server</code></td>
+  <td>📍 [optional] Enable Plex integration. Default <code>false</code>. Please make sure you have Plex Server installed and configured properly before enabling this.<br> This server supports native subtitles, but if you want to automatically fetch subtitles, it is better to use Plex to fetch these. 
+  <br> If you want better on-demand transcoding experience, it is strongly recommended to install Plex server to enable seamless media streaming.<br>
+  Even without Plex server, this server can still work well but pls note the following:
+  <br>→ For the media that can be directly played in your device, seeking feature is working perfectly. 
+  <br>→ For those your device can not directly play: i.e. <code>h.265 with DTS audio</code> (h.265 with acc or mp3 is not affected), <code>.mkv</code>, <code>.ts</code> or <code>.wmv</code> this server is still able to transcode on the fly but seeking feature might not be available. 
+  </td>
+  </tr>
+  <tr>
+    <td><code>plex.base_url</code></td>
+    <td>Plex server base URL.</td>
+  </tr>
+  <tr>
+    <td><code>plex.token</code></td>
+    <td>Plex token</td>
+  </tr>
+  <tr>
+    <td><code>debug_enabled</code></td>
+    <td>Show the built-in debug overlay</td>
+  </tr>
+  <tr>
+    <td><code>direct_playback</code></td>
+    <td>Object with <code>enabled</code> and <code>audio_whitelist</code>. With <code>enabled=true</code>, this allows you play the media with native player without transcoding (fast). Suggest to use default settings.</td>
+  </tr>
+</table>
 
 ### Minimal Local-Only Example
 
@@ -225,14 +292,14 @@ The sample config is intentionally sanitized and does not include:
 }
 ```
 
-### Plex Scan Behavior
+### 🅿️ Plex Scan Behavior
 
 - local poster thumbnail generation is skipped when Plex posters are available
 - existing cached local thumbnails can still be reused
 - preview-frame generation remains enabled
 - Plex integration stays optional and local-only mode still works
 
-### How To Get A Plex Token
+### → How To Get A Plex Token
 
 #### Method 1: Existing Plex Web Session
 
@@ -259,7 +326,7 @@ If you already have an active Plex Web session on the same machine, inspect Plex
 X-Plex-Token=...
 ```
 
-Security notes:
+‼️ Security notes:
 
 - treat the Plex token like a password
 - do not commit it into git
@@ -267,7 +334,7 @@ Security notes:
 
 ---
 
-## Playback Modes
+## 🎥 Playback Modes
 
 ### 1. Native Direct Playback
 
@@ -326,27 +393,6 @@ Best for:
 
 ---
 
-## Debug Overlay
-
-Enable `debug_enabled` in `movies_config.json` to keep a permanent debug overlay in the lower-right corner.
-
-The panel reports:
-
-- whether the server is favoring direct playback or Plex
-- the configured direct-play audio whitelist
-- the current playback candidate and video ID
-- recent scan progress metrics
-
-Inspect active config values with:
-
-```bash
-curl -s http://localhost:9245/api/config | python3 -m json.tool
-```
-
-If you serve the app under `/movie/`, use the prefixed path instead.
-
----
-
 ## Authentication Model
 
 The app uses different transport methods depending on request type:
@@ -377,7 +423,7 @@ Routing preserves the active mount prefix for:
 
 ## Remote Plex Access With Tailscale
 
-If the custom UI is reachable remotely but Plex is only reachable on a private LAN, the movies server host must still be able to reach the Plex backend directly.
+If the custom UI is reachable remotely but Plex is only reachable on a private LAN (i.e. Free subcription), the movies server host must still be able to reach the Plex backend directly.
 
 ### Same Host
 
@@ -401,7 +447,7 @@ Then verify reachability from the movies server host:
 curl http://192.168.50.10:32400/identity
 ```
 
-Notes:
+📌 Notes:
 
 - the browser does not need direct network access to Plex
 - the movies server process must be able to reach `plex.base_url`
@@ -409,7 +455,7 @@ Notes:
 
 ---
 
-## Caching Strategy
+## 💾 Caching Strategy
 
 ### Image Caching
 
@@ -439,7 +485,7 @@ Eviction is opportunistic rather than scheduled:
 
 ---
 
-## Scan Behavior
+## 🔍 Scan Behavior
 
 The catalog scan is designed to stay incremental in cost even though it still walks each configured root.
 
@@ -461,29 +507,7 @@ What it does not do:
 - it does not checksum large media files during periodic scans
 - it does not regenerate thumbnails or metadata for unchanged files unless cached artifacts are missing
 
-### Force Full Rescan
-
-Use:
-
-```text
-/rescan?full=1
-```
-
-This is useful when:
-
-- someone manually deleted the thumbnail or preview cache folder
-- you suspect the saved scan manifest is stale
-- you want to force full revalidation of scan-derived state
-
-### Check Scan Status
-
-```bash
-curl -s http://localhost:9245/api/status | python3 -m json.tool
-```
-
-If you serve the app under `/movie/`, use the prefixed path.
-
-### Trigger Rescan
+### → Trigger Rescan
 
 Normal incremental rescan:
 
@@ -497,7 +521,7 @@ Forced full rescan:
 curl -s "http://localhost:9245/rescan?full=1" | python3 -m json.tool
 ```
 
-### Rescan UI
+### → Rescan UI
 
 The `Rescan` button opens an action dialog instead of immediately starting an incremental scan.
 
@@ -507,7 +531,9 @@ Available actions:
 - `Full Scan`: clears saved scan state and forces full metadata revalidation
 - `Refresh Database`: clears browser IndexedDB snapshots and reloads fresh catalog data
 
-### Missing Mount Recovery
+### ⛓️‍💥 Missing Mount Recovery
+
+This feature is designed for the case some NAS might be configured with auto sleep mode, hence SMB mount might be auto ejected from some Operation system.
 
 If `mount_script` is configured and a media request hits a missing folder, the server will:
 
@@ -520,28 +546,7 @@ The frontend treats playback 404s as terminal for that attempt and shows a retry
 
 ---
 
-## Frontend Development Notes
-
-The app currently loads `movies.js` directly from `index.html`, so frontend changes take effect without rebuilding `movies.min.js`.
-
----
-
-## Private Mode
-
-- private folders are hidden unless the device is authorized
-- unlock state is tied to a device ID
-- approved devices are stored server-side
-- `passcode.py` can rotate the private-mode passcode and clear approvals
-
-Example:
-
-```bash
-python3 passcode.py mynewpasscode
-```
-
----
-
-## Generated Files
+## 📄 Generated Files
 
 These files are runtime-generated and should not be committed:
 
@@ -553,29 +558,48 @@ These files are runtime-generated and should not be committed:
 
 ---
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
-### UI Changes Do Not Appear
 
+### → Debug Overlay
+
+Enable `debug_enabled` in `movies_config.json` to keep a permanent debug overlay in the lower-right corner.
+
+The panel reports:
+
+- whether the server is favoring direct playback or Plex
+- the configured direct-play audio whitelist
+- the current playback candidate and video ID
+- recent scan progress metrics
+
+Inspect active config values with:
+
+```bash
+curl -s http://localhost:9245/api/config | python3 -m json.tool
+```
+
+### → UI Changes Do Not Appear
+
+- The app currently loads `movies.js` directly from `index.html`, so frontend changes take effect without rebuilding `movies.min.js`.
 - refresh the page normally first
 - if the JS bundle changed, confirm `index.html` references the expected bundle version
 
-### Direct Private Playback Fails
+### → Direct Private Playback Fails
 
 - unlock private mode again so the `movies_device_id` cookie is refreshed
 
-### Plex Playback Fails But Direct Playback Works
+### → Plex Playback Fails But Direct Playback Works
 
 - verify the movies server host can reach `plex.base_url`
 - verify Plex is enabled in config
 - verify the configured token is valid
 
-### Direct Playback Fails But Plex Works
+### → Direct Playback Fails But Plex Works
 
 - the container or codec is likely not safe for native browser playback on that device
 - keep Plex enabled for those files, or force the compatibility path through local transcode or Plex
 
-### Local Transcoding Does Not Work
+### → Local Transcoding Does Not Work
 
 - verify `ffmpeg` and `ffprobe` are installed
 - verify `on_demand_transcode` is enabled
@@ -583,6 +607,17 @@ These files are runtime-generated and should not be committed:
 
 ---
 
-## License
+## 📦 Release Versioning
+
+Package versions are derived from Git tags.
+
+- TestPyPI/testing: use a development version such as `2026.3.26.dev1`
+- PyPI prerelease: use a release candidate such as `2026.3.26rc1`
+- PyPI stable: use a stable version such as `2026.3.26`
+- Git tags should be `v2026.3.26.dev1`, `v2026.3.26rc1`, and `v2026.3.26`
+  
+---
+
+## ©️ License
 
 This project is released under the MIT License. Add a `LICENSE` file containing the MIT text when publishing or redistributing it.
