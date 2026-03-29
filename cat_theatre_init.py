@@ -83,7 +83,7 @@ def print_next_steps(config_path: Path):
     print("- ffprobe")
     print()
     print("Start the server with:")
-    print(f"cat-theatre-server --config {config_path}")
+    print(f"plex-cat-theatre --config {config_path}")
     print()
     print("Then open:")
     print("http://localhost:9245")
