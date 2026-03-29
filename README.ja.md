@@ -1,75 +1,82 @@
-# Cat Theatre Movies Server
+<div align="center">
+  <img width="700" alt="7844F597-CBA9-4EAD-80DE-19991552F906" src="https://github.com/user-attachments/assets/2f1fc4cf-8b63-47d0-aebf-53355dd8f032" />
 
-> Flask、Waitress、`ffmpeg` で構築された軽量なセルフホスト型の映画ブラウザ兼ストリーミングサーバーで、互換性重視の再生のために _`Plex`_ 統合を任意で利用できます。
+  <h1>Cat Theatre Movies Server 🐱</h1>
+  <p>
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.md">English</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md">Deutsch</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md">Français</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.ja.md">日本語</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md">한국어</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md">Nederlands</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md">ไทย</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md">Tiếng Việt</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md">简体中文</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md">繁體中文（香港）</a> |
+    <a href="https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md">繁體中文（台灣）</a>
+  </p>
+  <p><strong>超軽量、プライベートモード 🔐、マルチデバイス、スマートストリーミング</strong></p>
+  <p>アプリ不要。サーバー導入は簡単。モバイル向けにも使いやすい画面で、どこからでも NAS に接続でき、必要に応じて Plex と連携できます</p>
+  <p>
+    <img src="https://img.shields.io/badge/stability-experimental-orange.svg" alt="Experimental" />
+    <a href="https://opensource.org/licenses/MIT">
+      <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" />
+    </a>
+    <a href="http://github.com/daocha/plex-cat-theatre/releases/latest">
+      <img src="https://img.shields.io/github/v/release/daocha/plex-cat-theatre?label=Latest&color=green" alt="Latest Release" />
+    </a>
+    <img src="https://img.shields.io/badge/python-3.9+-blue" alt="Python 3.9+" />
+  </p>
+</div>
+
+
+
+> 重い依存関係なし、すべてが透明。Flask、Waitress、`ffmpeg` で構築された軽量なセルフホスト型の映画ブラウザ兼ストリーミングサーバーで、互換性重視の再生のために _`Plex`_ 統合を任意で利用できます。
 
 ---
 
-![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
+![Screenshot 2026-03-22 at 9 39 12 PM](https://github.com/user-attachments/assets/124f21b7-71b0-46fc-9d76-c73f700c25f3)
 
 ---
 
-**言語**
-
-[English](https://github.com/daocha/plex-cat-theatre/blob/main/README.md) | [简体中文](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-CN.md) | [繁體中文（香港）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-HK.md) | [繁體中文（台灣）](https://github.com/daocha/plex-cat-theatre/blob/main/README.zh-TW.md) | [Français](https://github.com/daocha/plex-cat-theatre/blob/main/README.fr.md) | [한국어](https://github.com/daocha/plex-cat-theatre/blob/main/README.ko.md) | `日本語` | [Deutsch](https://github.com/daocha/plex-cat-theatre/blob/main/README.de.md) | [ไทย](https://github.com/daocha/plex-cat-theatre/blob/main/README.th.md) | [Tiếng Việt](https://github.com/daocha/plex-cat-theatre/blob/main/README.vi.md) | [Nederlands](https://github.com/daocha/plex-cat-theatre/blob/main/README.nl.md)
-
----
-
-## 概要
+## ✨ 使う理由
 
 Cat Theatre は意図的に軽量です。
 
-- Python 依存関係が少ない
-- データベースが不要
-- ファイルシステム中心のカタログ化
-- OS 固有のウォッチャーに依存せず、移植性のあるポーリング型スキャンフローを使用
-- Plex 統合はコア再生の必須要件ではなく任意レイヤー
+- 🩷 _リモートアクセス_ のために Plex のサブスクリプション 💰 は不要
+- ✅ Python 依存関係が少ない
+- ✅ データベースが不要
+- ✅ ファイルシステム中心のカタログ化
+- ✅ 🖥️ デスクトップ、📱 モバイル、タブレットに対応
+- ✅ OS 固有のウォッチャー依存ではなく、移植性のあるポーリング型スキャンフロー
+- 🔶 Plex 統合はコア再生に必須ではなく、任意で重ねられる追加レイヤー
 
-以下の用途を想定しています。
+## ✴️ 機能
 
-- 1 つ以上のフォルダにまたがるローカルメディアライブラリ
-- サムネイルとプレビューフレームの生成
-- デバイス単位のプライベートフォルダアクセス制御
-- `/movie/` のようなパスプレフィックス配下でのリバースプロキシ運用
-- 直接ファイル再生、内蔵ローカルトランスコード、Plex ベース HLS を混在させた再生戦略
-
----
-
-## 機能
-
-- 複数ルートのメディアスキャン
-- ポスターサムネイルとプレビューフレーム生成
-- デバイスベースで解除するプライベートフォルダ
-- ブラウザ安全形式のネイティブ直接再生
-- 有効時に `.mkv` と `.ts` の内蔵ローカルトランスコード
-- 再生、ポスター、字幕、HLS プロキシのための Plex 統合
-- リバースプロキシ向けのコンテキストパス対応ルーティング
-- ブラウザ画像キャッシュと IndexedDB メタデータキャッシュ
-
-### UX と再生に関するメモ
-
-- 内蔵デバッグパネルは右下にあり、最も近い端へスライドできます
-- 再生は現在のファイルとデバイスに対してより安全な経路を自動で優先します
-- 手動の Direct/Plex オーバーライドは動画ごとに IndexedDB に保存されます
-- キャッシュされたサムネイルとメタデータはブラウザの保存容量制限内に収まります
+- 🎬 複数フォルダにまたがるローカル / NAS メディアライブラリ
+- 🌄 サムネイル / ポスターとプレビューフレームの生成
+- 🔐 デバイス単位で解除するプライベートフォルダ
+- 🔗 `http://192.168.1.100/movie/` のようなパスプレフィックス配下でのリバースプロキシ運用
+- 📽️ 混在する再生戦略: 直接再生、`.mkv` / `.ts` 向けの内蔵ローカルトランスコード、または Plex ベース HLS プロキシ。メディアごとに簡単に切り替え可能
+- 🌐 ブラウザ画像キャッシュと IndexedDB メタデータキャッシュ
 
 ---
-
-## 要件
-
-### Python
-
-```bash
-python -m pip install -e .
+→ ワンライナーでセットアップ:
 ```
+curl -fsSL https://raw.githubusercontent.com/daocha/plex-cat-theatre/main/install.sh | bash
+```
+---
+
+## 🟢 動作要件
+
+### Python 3.9 以上
 
 現在の Python パッケージ:
 
 - `Flask`
 - `waitress`
 
-### システムバイナリ
-
-メタデータ解析、プレビュー、サムネイル、ローカルトランスコードに必要:
+### メタデータ解析、プレビュー、サムネイル生成、ローカルトランスコードに必要なシステムバイナリ:
 
 - `ffmpeg`
 - `ffprobe`
@@ -83,9 +90,15 @@ which ffprobe
 
 ---
 
-## クイックスタート
+## 🚀 クイックスタート
 
-PyPI で公開されたパッケージをインストールする場合は、次を使用します。
+
+### → オプション A: ワンライナーでセットアップ:
+```
+curl -fsSL https://raw.githubusercontent.com/daocha/plex-cat-theatre/main/install.sh | bash
+```
+
+### → オプション B: pip で PyPI からインストール
 
 ```bash
 pip install plex-cat-theatre
@@ -93,13 +106,15 @@ plex-cat-theatre-init
 plex-cat-theatre --config ~/movies_config.json
 ```
 
-推奨される起動方法:
+### → オプション C: 推奨の起動方法
 
 ```bash
+git clone https://github.com/daocha/plex-cat-theatre
+cd plex-cat-theatre
 ./startup.sh
 ```
 
-このブートストラップスクリプトは次のことを行えます。
+このブートストラップスクリプトでは次のことができます。
 
 - 初回起動時にサンプル設定から `movies_config.json` を作成
 - ローカル `.venv` を作成
@@ -109,9 +124,9 @@ plex-cat-theatre --config ~/movies_config.json
 - 必要に応じてプライベートモード用パスコードのハッシュ生成を支援
 - ローカル設定でサーバーを起動
 
-以下の手動手順も引き続き利用できます。
+以下の手動フローも利用できます。
 
-1. サンプル設定をコピーします。
+1. サンプル設定をコピー:
 
 ```bash
 cp movies_config.sample.json movies_config.json
@@ -119,28 +134,42 @@ cp movies_config.sample.json movies_config.json
 
 2. 環境に合わせて `movies_config.json` を編集します。
 
-3. サーバーを起動します。
+### 🌐 サーバーを起動:
 
 ```bash
+# オプション A またはオプション B を使う場合
+plex-cat-theatre --config ~/movies_config.json
+
+# オプション C を使う場合
 python3 movies_server.py --config movies_config.json
 ```
 
-4. UI を開きます。
+画面を開く:
 
 ```text
 http://localhost:9245
 ```
+### 🔑 パスコードを変更
+```bash
+# オプション A またはオプション B を使う場合
+plex-cat-theatre-passcode newpasscode
 
-`/movie/` のようなプレフィックス配下でリバースプロキシ運用している場合は、そのプレフィックス付き URL を開いてください。
+# オプション C を使う場合
+python3 passcode.py newpasscode
+```
+- プライベートフォルダはデバイスが承認されるまで非表示
+- 解除状態はデバイス ID に紐づく
+- 承認済みデバイスはサーバー側に保存される
+- このスクリプトでプライベートモードのパスコードをローテーションし、承認をクリアできる
 
 ---
 
-## プロジェクト構成
+## 🗂️ プロジェクト構成
 
-- `movies_server.py`: Flask のエントリポイントとルーティング
+- `movies_server.py`: Flask エントリーポイントとルーティング接続
 - `movies_server_core.py`: 認証、設定、Cookie、マウントパス処理の共通サーバーヘルパー
 - `movies_catalog.py`: カタログスキャン、サムネイル生成、字幕抽出、ローカルトランスコード補助
-- `movies_server_plex.py`: Plex アダプタ、ポスター/字幕マッピング、Plex HLS プロキシ
+- `movies_server_plex.py`: Plex アダプタ、ポスター / 字幕の対応付け、Plex HLS プロキシ
 - `movies.js`: フロントエンドソース
 - `movies.min.js`: 圧縮済みフロントエンドバンドル
 - `movies.css`: ギャラリーとプレイヤーのスタイル
@@ -148,44 +177,82 @@ http://localhost:9245
 
 ---
 
-## リリースのバージョニング
+## ⚙️ 設定
 
-パッケージのバージョンは Git タグから導出されます。
-
-- TestPyPI/テスト: `2026.3.26.dev1` のような開発版を使います
-- PyPI プレリリース: `2026.3.26rc1` のようなリリース候補を使います
-- PyPI 安定版: `2026.3.26` のような安定版を使います
-- Git タグは `v2026.3.26.dev1`、`v2026.3.26rc1`、`v2026.3.26` にします
-
----
-
-## 設定
-
-サンプル設定は意図的にサニタイズされており、以下を含みません。
+サンプル設定は意図的にサニタイズされており、以下は含まれていません。
 
 - 実際のファイルシステムパス
 - 実際の Plex トークン
-- 実際のパスコード
+- 実際のハッシュ化済みパスコード
 - デバイス固有の値
 
-### 重要な項目
+### 📍 重要な項目
 
-- `root`: スキャンするメディアルート
-- `thumbs_dir`: サムネイルとプレビューフレームのディレクトリ
-- `private_folder`: プライベートとして扱うフォルダ接頭辞
-- `private_passcode`: プライベートモードのパスコードハッシュ
-- `mount_script`: 再生時にメディアフォルダが見つからない場合に呼び出す任意コマンド
-- `transcode`: `.mkv` や `.ts` などのソースコンテナ向けに、カタログ側のバックグラウンドトランスコードワーカーを有効化します。これはメディアライブラリの横に別個のトランスコード済みサイドカーファイルを生成する可能性があるため、通常は `false` のままにしておくのがよく、特に Plex 統合を有効にしている場合はそうです
-- `auto_scan_on_start`: 起動時にメディアを再スキャン
-- `on_demand_transcode`: プレイヤー実行時のソースコンテナ向けトランスコードを有効化し、利用可能であればハードウェアエンコードを優先し、必要に応じてソフトウェアエンコードへフォールバックします
-- `on_demand_hls`: ソースコンテナ向け内蔵 HLS プレイリストを有効化
-- `enable_plex_server`: Plex 統合を有効化
-- `plex.base_url`: Plex サーバーのベース URL
-- `plex.token`: Plex トークン
-- `debug_enabled`: 内蔵デバッグオーバーレイを表示
-- `direct_playback`: `enabled` と `audio_whitelist` を持つオブジェクト
+<table>
+  <tr>
+    <td width="200"><code>root</code></td>
+    <td>スキャン対象のメディアルート（複数フォルダ対応）</td>
+  </tr>
+  <tr>
+    <td><code>thumbs_dir</code></td>
+    <td>サムネイルとプレビューフレーム用ディレクトリ。既定値: <code>./cache/thumbnails</code></td>
+  </tr>
+  <tr>
+    <td><code>private_folder</code></td>
+    <td>プライベートとして扱うフォルダ接頭辞。例: <code>Personal</code>。<code>Personal</code> フォルダ配下の内容は画面で解除するまでロックされます。</td>
+  </tr>
+  <tr>
+    <td><code>private_passcode</code></td>
+    <td>プライベートモード用パスコードハッシュです。平文で直接更新しないでください。更新したい場合は <code>パスコードを変更</code> セクションを参照してください。</td>
+  </tr>
+  <tr>
+    <td><code>mount_script</code></td>
+    <td>[任意] 再生時にメディアフォルダがアンマウントされていることを検出した場合に実行するコマンド。</td>
+  </tr>
+  <tr>
+    <td><code>transcode</code></td>
+    <td>`.mkv` や `.ts` などのソースコンテナ向けに、カタログ側のバックグラウンドトランスコードワーカーを有効化します。元ライブラリの横に別のトランスコード済みサイドカーファイルを生成する場合があるため、特に Plex 統合を有効にしているときは通常 <code>false</code> のままが推奨です。既定値: <code>false</code></td>
+  </tr>
+  <tr>
+    <td><code>auto_scan_on_start</code></td>
+    <td>起動時にメディアを再スキャンします。既定値: <code>false</code></td>
+  </tr>
+  <tr>
+    <td><code>on_demand_transcode</code></td>
+    <td>ソースコンテナに対する実行時プレイヤートランスコードを有効化します。利用可能ならハードウェアエンコードを優先し、必要時にはソフトウェアエンコードへフォールバックします。既定値: <code>true</code></td>
+  </tr>
+  <tr>
+    <td><code>on_demand_hls</code></td>
+    <td>ソースコンテナ向けに内蔵 HLS プレイリストを有効化します。既定値: <code>true</code></td>
+  </tr>
+  <tr>
+  <td><code>enable_plex_server</code></td>
+  <td>📍 [任意] Plex 統合を有効化します。既定値: <code>false</code>。有効にする前に、Plex Server が正しくインストールされ設定済みであることを確認してください。<br> このサーバーはネイティブ字幕を扱えますが、自動で字幕を取得したい場合は Plex を使う方が適しています。
+  <br> オンデマンドトランスコード体験をより良くしたい場合は、シームレスなメディア配信のために Plex server の導入を強く推奨します。<br>
+  Plex server がなくてもこのサーバーは十分使えますが、次の点に注意してください。
+  <br>→ デバイスが直接再生できるメディアでは、シーク機能は問題なく動作します。
+  <br>→ デバイスが直接再生できないメディア、たとえば <code>DTS 音声付き h.265</code>（AAC または MP3 の h.265 は影響なし）、<code>.mkv</code>、<code>.ts</code>、<code>.wmv</code> ではオンザフライ変換は可能ですが、シークが使えないことがあります。
+  </td>
+  </tr>
+  <tr>
+    <td><code>plex.base_url</code></td>
+    <td>Plex サーバーのベース URL。</td>
+  </tr>
+  <tr>
+    <td><code>plex.token</code></td>
+    <td>Plex トークン</td>
+  </tr>
+  <tr>
+    <td><code>debug_enabled</code></td>
+    <td>内蔵デバッグオーバーレイを表示</td>
+  </tr>
+  <tr>
+    <td><code>direct_playback</code></td>
+    <td><code>enabled</code> と <code>audio_whitelist</code> を持つオブジェクトです。<code>enabled=true</code> のとき、トランスコードせずにネイティブプレイヤーで再生できます（高速）。既定設定のまま使うのがおすすめです。</td>
+  </tr>
+</table>
 
-### 最小ローカル専用例
+### 最小のローカル専用例
 
 ```json
 {
@@ -225,159 +292,138 @@ http://localhost:9245
 }
 ```
 
-### Plex スキャン動作
+### 🅿️ Plex スキャン時の挙動
 
-- Plex ポスターが利用可能な場合、ローカルポスターサムネイル生成はスキップされます
-- 既存のローカルキャッシュ済みサムネイルは再利用できます
-- プレビューフレーム生成は引き続き有効です
-- Plex 統合は任意であり、ローカル専用モードも機能します
+- Plex ポスターが利用可能な場合、ローカルのポスターサムネイル生成はスキップされる
+- 既存のローカルキャッシュ済みサムネイルは引き続き再利用できる
+- プレビューフレーム生成は有効のまま
+- Plex 統合は任意であり、ローカル専用モードも引き続き使える
 
-### Plex トークンの取得方法
+### → Plex トークンの取得方法
 
 #### 方法 1: 既存の Plex Web セッション
 
 1. Plex Web を開いてサインインします。
 2. ブラウザの開発者ツールを開きます。
-3. Network タブに移動します。
+3. ネットワークタブに移動します。
 4. ページを再読み込みします。
-5. Plex サーバーへ送信されたリクエストを確認します。
+5. Plex サーバーに送られているリクエストを確認します。
 6. URL またはヘッダー内の `X-Plex-Token` を探します。
 
 #### 方法 2: ブラウザストレージ
 
-以下を確認します。
+確認する項目:
 
-- Local Storage
-- Session Storage
-- DevTools 内のリクエスト URL とヘッダー
+- ローカルストレージ (`Local Storage`)
+- セッションストレージ (`Session Storage`)
+- DevTools 上のリクエスト URL とヘッダー
 
-#### 方法 3: 直接ローカルリクエスト
+#### 方法 3: ローカルへの直接リクエスト
 
-同じマシンで Plex Web のアクティブセッションがすでにある場合は、DevTools で Plex リクエストを確認し、以下を探します。
+同じマシンで Plex Web にログイン済みであれば、DevTools で Plex リクエストを確認し、次を探します。
 
 ```text
 X-Plex-Token=...
 ```
 
-セキュリティ上の注意:
+‼️ セキュリティ上の注意:
 
-- Plex トークンはパスワード同様に扱ってください
-- git にコミットしないでください
-- `movies_config.json` のみに保持してください
+- Plex トークンはパスワード同様に扱う
+- git にコミットしない
+- `movies_config.json` にのみ保存する
 
 ---
 
-## 再生モード
+## 🎥 再生モード
 
 ### 1. ネイティブ直接再生
 
-`.mp4`、`.m4v`、`.webm` のようなブラウザ安全ファイルに使用されます。
+`.mp4`、`.m4v`、`.webm` のようなブラウザセーフなファイルに使われます。
 
-動作:
+挙動:
 
-- ローカルファイルを `/video/<id>` から直接配信
-- HTTP Range リクエストをサポート
-- ブラウザがネイティブ再生できる場合、トランスコードの負荷を回避
+- `/video/<id>` からローカルファイルを直接配信
+- HTTP range request をサポート
+- ブラウザがネイティブ再生できる場合、トランスコードのオーバーヘッドを回避
 
-最適な用途:
+向いているケース:
 
-- MP4/H.264 系のファイル
-- ブラウザがすでに直接再生できるファイル
-- 音声コーデックが direct-play ホワイトリストに一致するファイル
+- MP4 / H.264 系のファイル
+- ブラウザがそのまま再生できるファイル
+- 音声コーデックが direct-play ホワイトリストに合致するファイル
 
-### 2. Plex なしの内蔵ローカルトランスコード
+### 2. Plex を使わない内蔵ローカルトランスコード
 
-これは Plex が有効でない場合、または完全にローカルで運用したい場合のフォールバック経路です。
+Plex が無効な場合、または完全ローカルで運用したい場合のフォールバック経路です。
 
 現在の実装:
 
-- `.mkv` と `.ts` は `/hls/<id>/index.m3u8` でローカル HLS として公開できます
-- 同じファイルは `/video/<id>?fmp4=1` で fragmented MP4 としても配信できます
-- HLS セグメントは `ffmpeg` でオンデマンド生成されます
-- ハードウェアエンコードを先に試し、`libx264` にフォールバックできます
-- fMP4 出力は `libx264` と AAC で生成されます
+- `.mkv` と `.ts` は `/hls/<id>/index.m3u8` でローカル HLS として配信可能
+- 同じファイルを `/video/<id>?fmp4=1` で fragmented MP4 として配信することも可能
+- HLS セグメントは `ffmpeg` でオンデマンド生成
+- まずハードウェアエンコードを試し、必要に応じて `libx264` にフォールバック
+- fMP4 出力は `libx264` と AAC で生成
 
-### 3. Plex ベースの再生
+### 3. Plex バックエンド再生
 
 Plex 統合が有効な場合:
 
-- フロントエンドは互換性重視の再生に `plex_stream_url` を利用できます
-- Plex が上流 HLS プレイリストを生成します
-- このサーバーはプレイリストを書き換え、ネストされたプレイリストとセグメント要求をプロキシします
-- ブラウザは Plex に直接ではなく、このアプリと通信し続けます
+- フロントエンドは互換性重視の再生で `plex_stream_url` を使用可能
+- Plex が上流の HLS プレイリストを生成
+- このサーバーがプレイリストを書き換え、ネストされたプレイリストやセグメント要求をプロキシ
+- ブラウザは Plex ではなく、このアプリと通信し続ける
 
-最適な用途:
+向いているケース:
 
-- コーデックやコンテナの対応が弱いデバイス上の MKV または TS コンテンツ
-- Plex の字幕選択やストリーム正規化を優先したいケース
+- コーデックやコンテナのサポートが弱いデバイスでの MKV / TS コンテンツ
+- 字幕選択やストリーム正規化を Plex に任せたいケース
 
-### 再生選択ポリシー
+### 再生方式の選択ポリシー
 
-- 音声コーデックが `direct_playback.audio_whitelist` に一致するブラウザ安全ファイルでは direct playback が優先されます
-- `.mkv`、`.ts`、HLS、fMP4、または未対応の音声コーデックでは Plex が引き続き優先されます
-- iOS ネイティブ HLS フォールバックは Plex ストリームのウォームアップ時間を確保するため長めです
+- ブラウザセーフで音声コーデックが `direct_playback.audio_whitelist` に合うファイルは直接再生を優先
+- `.mkv`、`.ts`、HLS、fMP4、または非対応音声コーデックでは Plex を優先
+- iOS ネイティブ HLS のフォールバック待機は長めで、Plex ストリームのウォームアップ時間を確保
 
-### デフォルト再生ロジック
+### 既定の再生ロジック
 
-- Direct URL が実ファイルパスで、音声コーデックがホワイトリスト安全な場合、`.mp4`、`.m4v`、`.webm`、`.avi` では `Direct` が優先されます
-- それらのブラウザ安全拡張子で音声コーデックメタデータが欠けていても、アプリはなお `Direct` を優先します
-- `.mkv`、`.ts`、HLS/fMP4 の Direct URL、および既知の音声コーデックがホワイトリスト外のファイルでは `Plex` が優先されます
-- Plex に一致しない場合、アプリは `Direct` にフォールバックします
-
----
-
-## デバッグオーバーレイ
-
-`movies_config.json` で `debug_enabled` を有効にすると、右下に常時表示されるデバッグオーバーレイを維持できます。
-
-パネルには以下が表示されます。
-
-- サーバーが direct playback と Plex のどちらを優先しているか
-- 設定された direct-play 音声ホワイトリスト
-- 現在の再生候補と動画 ID
-- 最近のスキャン進行メトリクス
-
-有効な設定値の確認:
-
-```bash
-curl -s http://localhost:9245/api/config | python3 -m json.tool
-```
-
-`/movie/` 配下で配信している場合は、プレフィックス付きのパスを使用してください。
+- 直接 URL が実ファイルパスで、音声コーデックがホワイトリスト安全なら `.mp4`、`.m4v`、`.webm`、`.avi` は `Direct` を優先
+- これらの拡張子で音声コーデック情報が欠けていても、アプリは `Direct` を優先
+- `.mkv`、`.ts`、HLS / fMP4 の直接 URL、および既知の音声コーデックがホワイトリスト外のファイルでは `Plex` を優先
+- Plex に一致がなければ `Direct` にフォールバック
 
 ---
 
 ## 認証モデル
 
-アプリはリクエスト種別ごとに異なる転送方法を使います。
+このアプリはリクエスト種別ごとに異なる伝送方法を使います。
 
-- API リクエストは `X-Device-Id` ヘッダーを使用
-- HLS と Plex プロキシのリクエストは `X-Device-Id` ヘッダーを使用
-- ネイティブ直接メディアリクエストはフォールバックとして `movies_device_id` Cookie を使用
+- API リクエストは `X-Device-Id` ヘッダーを使う
+- HLS と Plex プロキシリクエストも `X-Device-Id` ヘッダーを使う
+- ネイティブ直接メディアリクエストは `movies_device_id` Cookie のフォールバックを使う
 
-この分離があるのは、ネイティブ `<video src="...">` リクエストでは任意のカスタムヘッダーを付与できないためです。
+この分割が必要なのは、ネイティブの `<video src="...">` リクエストでは任意のカスタムヘッダーを付けられないためです。
 
 ---
 
 ## リバースプロキシとコンテキストパス対応
 
-このアプリは次のようなサブパスでのデプロイに対応しています。
+このアプリは次のようなサブパス配下での運用をサポートします。
 
 - `https://example.com/movie/`
 - `https://example.com/cinema/`
 
-ルーティングは以下に対して現在のマウントプレフィックスを保持します。
+ルーティングは次の項目で現在のマウントプレフィックスを維持します。
 
 - 直接メディア
 - ローカル HLS
 - Plex HLS プロキシリクエスト
-- ポスターおよび字幕アセット
+- ポスターと字幕アセット
 
 ---
 
 ## Tailscale を使ったリモート Plex アクセス
 
-カスタム UI にはリモートから到達できても、Plex がプライベート LAN でしか到達できない場合、movies server のホストは Plex バックエンドに直接到達できる必要があります。
+カスタム画面にはリモートから到達できても、Plex はプライベート LAN でしか到達できない場合、movies server ホストから Plex バックエンドに直接到達できる必要があります。
 
 ### 同一ホスト
 
@@ -387,7 +433,7 @@ curl -s http://localhost:9245/api/config | python3 -m json.tool
 }
 ```
 
-### Plex が別の LAN マシンにある場合
+### 別の LAN マシン上の Plex
 
 Plex に到達できる Tailscale ノードからルートを広告します。
 
@@ -395,95 +441,73 @@ Plex に到達できる Tailscale ノードからルートを広告します。
 sudo tailscale up --advertise-routes=192.168.50.0/24
 ```
 
-その後、movies server ホストから到達性を確認します。
+次に movies server ホストから到達性を確認します。
 
 ```bash
 curl http://192.168.50.10:32400/identity
 ```
 
-注意:
+📌 メモ:
 
-- ブラウザは Plex への直接ネットワークアクセスを必要としません
-- movies server プロセスは `plex.base_url` に到達できなければなりません
-- UI 用のリバースプロキシや MagicDNS 名だけでは Plex には到達できません
+- ブラウザが Plex に直接アクセスできる必要はない
+- movies server プロセスは `plex.base_url` に到達できる必要がある
+- 画面側のリバースプロキシ名や MagicDNS 名だけでは Plex は到達可能にならない
 
 ---
 
-## キャッシュ戦略
+## 💾 キャッシュ戦略
 
 ### 画像キャッシュ
 
-サムネイル、プレビューフレーム、Plex ポスター画像は長寿命の immutable キャッシュヘッダー付きで配信されます。
+サムネイル、プレビューフレーム、Plex ポスター画像は長寿命の immutable cache header 付きで配信されます。
 
 ### メタデータキャッシュ
 
-ギャラリーメタデータのスナップショットは、容量制限付きで IndexedDB にキャッシュされます。
+ギャラリーのメタデータスナップショットは、容量制限付きで IndexedDB にキャッシュされます。
 
-- 1 日 TTL
+- TTL は 1 日
 - 最大 8 件のスナップショット
-- 推定合計サイズ約 18 MB まで
-- 制限超過時は古い項目を削除
+- 推定合計サイズは約 18 MB まで
+- 制限を超えた古い項目は削除
 
-各キャッシュスナップショットには次が保存されます。
+各キャッシュ済みスナップショットには次が保存されます。
 
 - サーバーの `catalogStatus`
 - フォルダ一覧キャッシュ
-- 読み込まれた `videos`
+- 読み込み済み `videos`
 - `serverTotal`、`serverOffset`、`serverExhausted` などのページネーションカウンタ
 
-削除は定期実行ではなく機会的です。
+削除は定期実行ではなく、機会があるときに行われます。
 
-- 期限切れの項目は読み取り時または後続の整理時に削除されます
-- 新しいスナップショット保存後に整理が走ります
-- ブラウザのストレージ圧迫や手動のサイトデータ削除でも IndexedDB データは削除される可能性があります
+- 期限切れ項目は読み込み時または後続の整理時に削除
+- 新しいスナップショット保存後に整理が走る
+- ブラウザのストレージ圧迫や手動でのサイトデータ削除でも IndexedDB データは消えることがある
 
 ---
 
-## スキャン動作
+## 🔍 スキャンの挙動
 
-カタログスキャンは、各設定ルートを依然走査しながらもコストを増分的に保つよう設計されています。
+カタログスキャンは、各ルートを走査し続けながらもコストを増分的に保つよう設計されています。
 
-現在の動作:
+現在の挙動:
 
-- 変更のないファイルはキャッシュされた `mtime + size` シグネチャを再利用します
-- 定期スキャンは処理前に完全なパス一覧を並べ替えなくなりました
-- 削除されたファイルはメモリ上のカタログと永続インデックスから削除されます
-- 削除されたファイルは生成済みのサムネイルやプレビューアーティファクトの掃除も引き起こします
-- インデックス保存は各ファイルを再度 stat せず、キャッシュされたファイルシグネチャデータを再利用します
+- 変更のないファイルは `mtime + size` のキャッシュ済みシグネチャを再利用
+- 定期スキャンでは処理前にフルパス一覧をソートしなくなった
+- 削除されたファイルはメモリ上のカタログと永続インデックスから削除
+- 削除されたファイルに対しては生成済みサムネイルやプレビューのクリーンアップも実行
+- インデックス保存では各ファイルを再度 `stat` せず、キャッシュ済みシグネチャデータを再利用
 
 スキャンが引き続き行うこと:
 
-- 追加、変更、削除されたファイルを検出するため、設定されたメディアルートを走査します
-- プレビュー画像がない場合、プレビュー生成をキューに入れます
+- 設定済みメディアルートを走査し、追加・変更・削除されたファイルを検出
+- プレビュー画像がない場合はプレビュー生成をキューに積む
 
-行わないこと:
+スキャンが行わないこと:
 
-- 定期スキャン中に大きなメディアファイルのチェックサムは計算しません
-- キャッシュアーティファクトが欠けていない限り、変更のないファイルのサムネイルやメタデータは再生成しません
+- 定期スキャン時に大きなメディアファイルのチェックサムは取らない
+- キャッシュ済みアーティファクトが存在する限り、未変更ファイルのサムネイルやメタデータは再生成しない
 
-### フル再スキャンを強制する
-
-使用:
-
-```text
-/rescan?full=1
-```
-
-次のような場合に有用です。
-
-- 誰かがサムネイルまたはプレビューキャッシュフォルダを手動で削除した
-- 保存されたスキャンマニフェストが古いと疑っている
-- スキャン由来の状態をすべて強制的に再検証したい
-
-### スキャン状態を確認する
-
-```bash
-curl -s http://localhost:9245/api/status | python3 -m json.tool
-```
-
-`/movie/` 配下で配信している場合は、プレフィックス付きのパスを使用してください。
-
-### 再スキャンを実行する
+### → 再スキャンを実行
 
 通常の増分再スキャン:
 
@@ -491,59 +515,40 @@ curl -s http://localhost:9245/api/status | python3 -m json.tool
 curl -s http://localhost:9245/rescan | python3 -m json.tool
 ```
 
-強制フル再スキャン:
+完全再スキャンを強制:
 
 ```bash
 curl -s "http://localhost:9245/rescan?full=1" | python3 -m json.tool
 ```
 
-### 再スキャン UI
+### → 再スキャン画面
 
-`Rescan` ボタンは、すぐに増分スキャンを始めるのではなくアクションダイアログを開きます。
+`Rescan` ボタンは即時に増分スキャンを開始せず、まずアクションダイアログを開きます。
 
 利用可能な操作:
 
-- `Rescan`: 新規または変更されたファイル向けの増分スキャン
-- `Full Scan`: 保存済みスキャン状態を消去し、メタデータの完全再検証を強制
-- `Refresh Database`: ブラウザの IndexedDB スナップショットを消去し、新しいカタログデータを再読み込み
+- `Rescan`: 新規または変更ファイルに対する増分スキャン
+- `Full Scan`: 保存済みスキャン状態を消去し、メタデータを全面的に再検証
+- `Refresh Database`: ブラウザの IndexedDB スナップショットを削除し、新しいカタログデータを再読み込み
 
-### マウント欠落時の回復
+### ⛓️‍💥 マウント消失時の復旧
 
-`mount_script` が設定され、メディア要求が欠落フォルダに当たった場合、サーバーは次を行います。
+この機能は、NAS が自動スリープ設定になっていて、一部 OS で SMB マウントが自動的に外れてしまうケースを想定しています。
+
+`mount_script` が設定されており、メディア要求が存在しないフォルダに当たった場合、サーバーは次のように動作します。
 
 1. 親フォルダが存在しないことを検出
-2. 設定済みマウントスクリプトを 1 回呼び出し
+2. 設定済みのマウントスクリプトを 1 回実行
 3. 対象パスを再確認
-4. フォルダがまだ利用不可の場合にのみ、HTTP 404 とともに `Media folder is not mounted` を返す
+4. それでもフォルダが利用できない場合にのみ `Media folder is not mounted` を HTTP 404 で返す
 
-フロントエンドは再生 404 をその試行の終了として扱い、サーバーへ繰り返しアクセスする代わりに再試行メッセージを表示します。
-
----
-
-## フロントエンド開発メモ
-
-現在このアプリは `index.html` から `movies.js` を直接読み込むため、フロントエンド変更は `movies.min.js` を再ビルドしなくても反映されます。
+フロントエンドは再生時の 404 をその試行の最終失敗として扱い、サーバーを繰り返し叩く代わりに再試行メッセージを表示します。
 
 ---
 
-## プライベートモード
+## 📄 生成されるファイル
 
-- プライベートフォルダはデバイスが認可されるまで非表示です
-- 解除状態はデバイス ID に紐づきます
-- 承認済みデバイスはサーバー側に保存されます
-- `passcode.py` はプライベートモードのパスコードをローテーションし、承認を消去できます
-
-例:
-
-```bash
-python3 passcode.py mynewpasscode
-```
-
----
-
-## 生成ファイル
-
-これらのファイルは実行時に生成され、コミットすべきではありません。
+以下のファイルは実行時に生成されるため、コミットしないでください。
 
 - `movies_config.json`
 - `movies_state.json`
@@ -553,36 +558,66 @@ python3 passcode.py mynewpasscode
 
 ---
 
-## トラブルシューティング
+## 🛠️ トラブルシューティング
 
-### UI 変更が表示されない
 
-- まず通常のページ更新を行います
-- JS バンドルが変更されている場合、`index.html` が期待したバージョンを参照しているか確認します
+### → デバッグオーバーレイ
 
-### プライベートコンテンツの直接再生が失敗する
+`movies_config.json` で `debug_enabled` を有効にすると、右下に常時表示されるデバッグオーバーレイを出せます。
 
-- `movies_device_id` Cookie を更新するため、もう一度プライベートモードを解除します
+パネルに表示される内容:
 
-### Plex 再生は失敗するが Direct 再生は動く
+- サーバーが直接再生と Plex のどちらを優先しているか
+- 設定済み direct-play 音声ホワイトリスト
+- 現在の再生候補と動画 ID
+- 直近のスキャン進捗メトリクス
 
-- movies server ホストが `plex.base_url` に到達できるか確認します
-- 設定で Plex が有効か確認します
-- 設定したトークンが有効か確認します
+現在有効な設定値の確認:
 
-### Direct 再生は失敗するが Plex 再生は動く
+```bash
+curl -s http://localhost:9245/api/config | python3 -m json.tool
+```
 
-- そのコンテナまたはコーデックは、そのデバイス上のブラウザでネイティブ再生に適していない可能性があります
-- そのようなファイルでは Plex を有効のままにするか、ローカルトランスコードまたは Plex による互換経路を強制してください
+### → 画面の変更が反映されない
 
-### ローカルトランスコードが動作しない
+- 現在アプリは `index.html` から `movies.js` を直接読み込んでいるため、フロントエンド変更は `movies.min.js` を再ビルドしなくても反映されます。
+- まず通常のリロードを試す
+- JS バンドルが変わった場合は、`index.html` が期待するバージョンを参照しているか確認する
 
-- `ffmpeg` と `ffprobe` がインストールされているか確認します
-- `on_demand_transcode` が有効か確認します
-- ソースファイルが現在サポートされるコンテナ `.mkv` または `.ts` に属しているか確認します
+### → プライベート動画の直接再生が失敗する
+
+- プライベートモードを再度解除し、`movies_device_id` Cookie を更新する
+
+### → Plex 再生は失敗するが直接再生は動く
+
+- movies server ホストから `plex.base_url` に到達できるか確認
+- 設定で Plex が有効か確認
+- 設定したトークンが有効か確認
+
+### → 直接再生は失敗するが Plex は動く
+
+- そのデバイスではコンテナまたはコーデックがブラウザネイティブ再生に向いていない可能性が高い
+- そのファイルでは Plex を使い続けるか、ローカルトランスコード / Plex で互換経路を強制する
+
+### → ローカルトランスコードが動かない
+
+- `ffmpeg` と `ffprobe` がインストールされているか確認
+- `on_demand_transcode` が有効か確認
+- 元ファイルが現在対応しているコンテナ `.mkv` または `.ts` か確認
 
 ---
 
-## ライセンス
+## 📦 リリース版のバージョニング
 
-このプロジェクトは MIT License の下で公開されます。公開または再配布する際は、MIT の本文を含む `LICENSE` ファイルを追加してください。
+パッケージバージョンは Git タグから決まります。
+
+- TestPyPI / testing: `2026.3.26.dev1` のような開発版を使う
+- PyPI プレリリース: `2026.3.26rc1` のような RC を使う
+- PyPI 安定版: `2026.3.26` のような安定版を使う
+- Git タグは `v2026.3.26.dev1`、`v2026.3.26rc1`、`v2026.3.26` にする
+  
+---
+
+## ©️ ライセンス
+
+このプロジェクトは MIT License で公開されています。公開または再配布する際は、MIT テキストを含む `LICENSE` ファイルを添付してください。
