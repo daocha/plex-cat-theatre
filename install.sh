@@ -2,6 +2,7 @@
 set -euo pipefail
 
 PACKAGE_NAME="plex-cat-theatre"
+PYTHON_BIN="python3"
 
 require_cmd() {
   local cmd="$1"
@@ -22,24 +23,32 @@ append_path_to_profile() {
   fi
 }
 
-require_cmd python3 "Install Python 3 first."
-
-TARGET_HOME="$(python3 - <<'PY'
+resolve_user_home() {
+  "$PYTHON_BIN" - <<'PY'
+from pathlib import Path
 import os
 import pwd
 
-user = os.environ.get("SUDO_USER") or os.environ.get("USER")
-if not user:
-    raise SystemExit("Unable to determine target user home")
-print(pwd.getpwnam(user).pw_dir)
+sudo_user = os.getenv("SUDO_USER", "").strip()
+if sudo_user and sudo_user != "root":
+    try:
+        print(pwd.getpwnam(sudo_user).pw_dir)
+    except KeyError:
+        print(Path.home())
+else:
+    print(Path.home())
 PY
-)"
+}
+
+require_cmd "${PYTHON_BIN}" "Install Python 3 first."
+
+TARGET_HOME="$(resolve_user_home)"
 CONFIG_PATH="${TARGET_HOME}/movies_config.json"
 
-python3 -m pip install --upgrade pip >/dev/null
-python3 -m pip install --upgrade "${PACKAGE_NAME}"
+"${PYTHON_BIN}" -m pip install --upgrade pip >/dev/null
+"${PYTHON_BIN}" -m pip install --upgrade "${PACKAGE_NAME}"
 
-BIN_DIR="$(python3 - <<'PY'
+BIN_DIR="$("${PYTHON_BIN}" - <<'PY'
 import sysconfig
 print(sysconfig.get_path("scripts"))
 PY
