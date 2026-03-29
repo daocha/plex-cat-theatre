@@ -7,13 +7,26 @@ import argparse
 import getpass
 import hashlib
 import json
+import os
+import pwd
 import shutil
 import sys
 from pathlib import Path
 
 from movies_resources import load_asset_text
 
-DEFAULT_CONFIG_PATH = Path.home() / "movies_config.json"
+
+def resolve_default_home() -> Path:
+    sudo_user = os.getenv("SUDO_USER", "").strip()
+    if sudo_user and sudo_user != "root":
+        try:
+            return Path(pwd.getpwnam(sudo_user).pw_dir)
+        except KeyError:
+            pass
+    return Path.home()
+
+
+DEFAULT_CONFIG_PATH = resolve_default_home() / "movies_config.json"
 PASSCODE_PLACEHOLDER = "sha256:replace-with-your-passcode-hash"
 
 

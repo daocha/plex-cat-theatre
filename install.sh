@@ -2,8 +2,7 @@
 set -euo pipefail
 
 PACKAGE_NAME="plex-cat-theatre"
-BIN_DIR="${HOME}/.local/bin"
-CONFIG_PATH="${HOME}/movies_config.json"
+PYTHON_BIN="python3"
 
 require_cmd() {
   local cmd="$1"
@@ -24,32 +23,47 @@ append_path_to_profile() {
   fi
 }
 
-require_cmd python3 "Install Python 3 first."
+require_cmd "${PYTHON_BIN}" "Install Python 3 first."
 
-mkdir -p "${BIN_DIR}"
+"${PYTHON_BIN}" -m pip install --upgrade pip >/dev/null
+"${PYTHON_BIN}" -m pip install --upgrade "${PACKAGE_NAME}"
 
-python3 -m pip install --user --upgrade pip >/dev/null
-python3 -m pip install --user --upgrade "${PACKAGE_NAME}"
+BIN_DIR="$("${PYTHON_BIN}" - <<'PY'
+import sysconfig
+print(sysconfig.get_path("scripts"))
+PY
+)"
 
-case "${SHELL##*/}" in
-  zsh)
-    append_path_to_profile "${HOME}/.zprofile"
-    ;;
-  bash)
-    append_path_to_profile "${HOME}/.bash_profile"
-    ;;
-esac
+CONFIG_PATH="$("${PYTHON_BIN}" - <<'PY'
+from cat_theatre_init import DEFAULT_CONFIG_PATH
+print(DEFAULT_CONFIG_PATH)
+PY
+)"
 
-if [[ ! -f "${CONFIG_PATH}" ]]; then
-  "${BIN_DIR}/plex-cat-theatre-init" --config "${CONFIG_PATH}"
+if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
+  mkdir -p "${BIN_DIR}"
+  case "${SHELL##*/}" in
+    zsh)
+      append_path_to_profile "${HOME}/.zprofile"
+      ;;
+    bash)
+      append_path_to_profile "${HOME}/.bash_profile"
+      ;;
+  esac
 fi
 
-echo "Installed ${PACKAGE_NAME} with python user-site packages"
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+  "${BIN_DIR}/plex-cat-theatre-init"
+fi
+
+echo "Installed ${PACKAGE_NAME} using the active python3 environment"
 echo "Commands are expected in ${BIN_DIR}"
 echo "Config: ${CONFIG_PATH}"
 echo
-echo "If your current shell does not see the command yet, run:"
-echo "export PATH=\"${BIN_DIR}:\$PATH\""
-echo
+if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
+  echo "If your current shell does not see the command yet, run:"
+  echo "export PATH=\"${BIN_DIR}:\$PATH\""
+  echo
+fi
 echo "Start the server with:"
 echo "plex-cat-theatre --config ${CONFIG_PATH}"
